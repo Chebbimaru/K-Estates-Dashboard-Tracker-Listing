@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Property Inventory — Bookings Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F5F3EE;
+    --card: #FFFFFF;
+    --ink: #171717;
+    --muted: #8C8678;
+    --hairline: #E7E1D3;
+    --row-fill: #FBFAF6;
+    --gold: #B08D3E;
+    --gold-soft: #E2D3AE;
+    --removed-bg: #1B1B1B;
+    --control-line: #C9C2B2;
+    --bar-track: #EFEAE0;
+    --thead-line: #C9C2B2;
+    --modal-bg: #F5F3EE;
+    --shadow: 0 2px 6px rgba(20, 16, 8, .05), 0 20px 44px -24px rgba(20, 16, 8, .18);
+    --shadow-lift: 0 4px 10px rgba(20, 16, 8, .06), 0 26px 56px -24px rgba(20, 16, 8, .24);
+  }
+  :root[data-theme="dark"] {
+    --bg: #131310;
+    --card: #1D1C18;
+    --ink: #ECE6D8;
+    --muted: #9A9386;
+    --hairline: #2E2C27;
+    --row-fill: #26241F;
+    --gold: #C9A950;
+    --gold-soft: #6B5A2E;
+    --control-line: #4A463C;
+    --bar-track: #2B2923;
+    --thead-line: #4A463C;
+    --modal-bg: #161511;
+    --shadow: 0 2px 8px rgba(0, 0, 0, .45), 0 24px 60px -24px rgba(0, 0, 0, .7);
+    --shadow-lift: 0 4px 12px rgba(0, 0, 0, .5), 0 30px 70px -26px rgba(0, 0, 0, .8);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]):not([data-theme="dark"]) {
+      --bg: #131310;
+      --card: #1D1C18;
+      --ink: #ECE6D8;
+      --muted: #9A9386;
+      --hairline: #2E2C27;
+      --row-fill: #26241F;
+      --gold: #C9A950;
+      --gold-soft: #6B5A2E;
+      --control-line: #4A463C;
+      --bar-track: #2B2923;
+      --thead-line: #4A463C;
+      --modal-bg: #161511;
+      --shadow: 0 2px 8px rgba(0, 0, 0, .45), 0 24px 60px -24px rgba(0, 0, 0, .7);
+      --shadow-lift: 0 4px 12px rgba(0, 0, 0, .5), 0 30px 70px -26px rgba(0, 0, 0, .8);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.5;
+    border-top: 3px solid var(--gold);
+  }
+
+  /* ---------- Header ---------- */
+  .topbar {
+    background: linear-gradient(180deg, #161616 0%, #0D0D0D 100%);
+    color: #EEE9DC;
+    border-bottom: 1px solid #2E2E2E;
+  }
+  .topbar-inner { max-width: 1240px; margin: 0 auto; padding: 26px 28px 24px; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 16px; }
+  .brand-mark {
+    width: 44px; height: 44px; border: 1px solid #FFFFFF; display: flex; align-items: center; justify-content: center;
+    font-size: 20px; font-weight: 300; color: #EEE9DC; letter-spacing: .02em; flex: none;
+  }
+  .eyebrow { font-size: 10px; letter-spacing: .42em; text-transform: uppercase; color: #FFFFFF; font-weight: 500; margin-bottom: 4px; }
+  .brand h1 { font-size: 21px; font-weight: 600; letter-spacing: .18em; text-transform: uppercase; color: #F4F0E6; }
+  .brand .sub { font-size: 10px; letter-spacing: .26em; text-transform: uppercase; color: #9A9487; margin-top: 5px; }
+  .topbar-right { display: flex; align-items: center; gap: 18px; }
+  #last-updated { font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: #9A9487; font-variant-numeric: tabular-nums; }
+  .refresh-btn {
+    background: transparent; border: 1px solid rgba(238,233,220,.4); color: #EEE9DC; padding: 9px 18px; cursor: pointer;
+    font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase;
+    transition: all .25s ease;
+  }
+  .refresh-btn:hover { background: #EEE9DC; color: #111; border-color: #EEE9DC; }
+  .refresh-btn:disabled { opacity: .5; cursor: wait; }
+  .theme-btn {
+    background: transparent; border: 1px solid rgba(238,233,220,.4); color: #EEE9DC; padding: 9px 12px; cursor: pointer;
+    font-family: 'Montserrat', sans-serif; font-size: 10px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase;
+    transition: all .25s ease; display: flex; align-items: center; justify-content: center;
+  }
+  .theme-btn .theme-ico { width: 15px; height: 15px; display: none; }
+  .theme-btn[data-mode="light"] .theme-ico-sun,
+  .theme-btn[data-mode="dark"] .theme-ico-moon,
+  .theme-btn[data-mode="system"] .theme-ico-system { display: block; }
+  .theme-btn:hover { background: #EEE9DC; color: #111; border-color: #EEE9DC; }
+
+  /* ---------- Layout ---------- */
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 34px 28px 70px; }
+
+  .tabs {
+    display: inline-flex; gap: 34px; border-bottom: 1px solid var(--hairline); margin-bottom: 30px; position: relative; width: 100%;
+  }
+  .tab {
+    padding: 0 0 14px; border: none; background: transparent; cursor: pointer; position: relative;
+    font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase;
+    color: var(--muted); transition: color .25s ease;
+  }
+  .tab::after { content: ''; position: absolute; left: 0; right: 0; bottom: -1px; height: 2px; background: var(--gold); transform: scaleX(0); transition: transform .3s ease; }
+  .tab:hover { color: var(--ink); }
+  .tab.active { color: var(--ink); }
+  .tab.active::after { transform: scaleX(1); }
+
+  .controls { display: flex; flex-wrap: wrap; gap: 26px; align-items: flex-end; margin-bottom: 30px; }
+  .controls label { display: block; font-size: 9px; letter-spacing: .28em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; font-weight: 600; }
+  .controls select, .controls input[type=text] {
+    padding: 10px 14px 10px 0; border: none; border-bottom: 1px solid var(--control-line); background: transparent;
+    font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 500; color: var(--ink); outline: none;
+    transition: border-color .25s ease; border-radius: 0;
+  }
+  .controls select { min-width: 160px; }
+  .controls select:focus, .controls input[type=text]:focus { border-bottom-color: var(--gold); }
+  .search-box { flex: 1 1 240px; max-width: 360px; }
+
+  .panel { display: none; animation: fadeIn .4s ease; }
+  .panel.active { display: block; }
+  @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+  /* ---------- KPI ---------- */
+  .stat-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; margin-bottom: 22px; }
+  .stat {
+    background: var(--card); border: 1px solid var(--hairline); border-top: 2px solid var(--gold);
+    padding: 22px 24px 20px; box-shadow: var(--shadow); transition: box-shadow .3s ease, transform .3s ease; position: relative;
+  }
+  .stat:hover { box-shadow: var(--shadow-lift); transform: translateY(-2px); }
+  .stat .lbl { font-size: 9px; letter-spacing: .32em; text-transform: uppercase; color: var(--muted); font-weight: 600; margin-bottom: 10px; }
+  .stat .num { font-size: 36px; font-weight: 200; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
+  .stat .num.sale { color: #1E9E54; }
+  .stat .num.rent { color: #F0830A; }
+  .stat .num.all { color: var(--ink); }
+  .stat .rule { position: absolute; top: 8px; left: 24px; right: 24px; height: 1px; background: var(--gold-soft); opacity: 0; transition: opacity .3s ease; }
+
+  /* ---------- Cards ---------- */
+  .card { background: var(--card); border: 1px solid var(--hairline); box-shadow: var(--shadow); padding: 28px 30px 30px; margin-bottom: 22px; }
+  .card h2 { font-size: 12px; font-weight: 700; letter-spacing: .28em; text-transform: uppercase; color: var(--ink); margin-bottom: 6px; }
+  .card .hint { font-size: 12px; color: var(--muted); margin-bottom: 22px; font-weight: 400; }
+
+  /* ---------- Chart ---------- */
+  .bar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; animation: rise .5s ease both; }
+  .bar-label { width: 190px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--ink); }
+  .bar-track { flex: 1; background: var(--bar-track); height: 22px; overflow: hidden; }
+  .bar-fill {
+    height: 100%; background: linear-gradient(90deg, #000000, #3A3A3A); color: #fff; display: flex; align-items: center; justify-content: flex-end;
+    padding-right: 10px; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
+    width: 0; transition: width .8s cubic-bezier(.22,.61,.36,1);
+  }
+  .bar-row:hover .bar-fill { background: var(--gold); }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+
+  /* ---------- Table ---------- */
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  thead th {
+    text-align: left; padding: 12px 14px; color: var(--muted); font-weight: 600; font-size: 9px;
+    text-transform: uppercase; letter-spacing: .24em; border-bottom: 1px solid var(--thead-line); white-space: nowrap;
+  }
+  td { padding: 14px; border-bottom: 1px solid var(--hairline); vertical-align: middle; font-weight: 400; font-variant-numeric: tabular-nums; }
+  .muted-char { color: var(--muted); }
+  tbody tr { transition: background .2s ease; }
+  tbody tr:hover td { background: var(--row-fill); }
+  .badge { display: inline-block; padding: 4px 12px; font-size: 9px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+  .badge.sale { background: #1E9E54; color: #fff; }
+  .badge.rent { background: #F0830A; color: #fff; }
+  .badge-st { display: inline-block; padding: 4px 12px; font-size: 9px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
+  .badge-st.active { background: var(--gold); color: #fff; }
+  .badge-st.removed { background: var(--removed-bg); color: #fff; }
+  .crm-link { color: var(--ink); text-decoration: underline; text-decoration-color: var(--gold-soft); text-underline-offset: 3px; font-weight: 600; transition: color .2s ease, text-decoration-color .2s ease; }
+  .crm-link:hover { color: var(--gold); text-decoration-color: var(--gold); }
+  .empty { text-align: center; color: var(--muted); padding: 50px 0; font-size: 13px; letter-spacing: .06em; }
+
+  /* ---------- Loader / Footer ---------- */
+  .loading { display: flex; align-items: center; justify-content: center; gap: 14px; padding: 80px 0; color: var(--muted); font-size: 11px; letter-spacing: .24em; text-transform: uppercase; }
+  .spinner { width: 20px; height: 20px; border: 2px solid var(--gold-soft); border-top-color: var(--gold); border-radius: 50%; animation: spin .8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .error-banner { background: #191919; color: #EFE9DC; border-left: 3px solid var(--gold); padding: 16px 20px; font-size: 12px; margin-bottom: 24px; letter-spacing: .03em; }
+  .gen { font-size: 9px; letter-spacing: .24em; text-transform: uppercase; color: var(--muted); margin-top: 28px; padding-top: 18px; border-top: 1px solid var(--hairline); }
+
+  .empty-state { text-align: center; padding: 60px 0; color: var(--muted); }
+  .empty-state .mark { font-size: 26px; color: var(--gold); margin-bottom: 12px; }
+
+  /* ---------- Log button ---------- */
+  .log-btn {
+    background: transparent; border: 1px solid var(--control-line); color: var(--ink); padding: 6px 14px; cursor: pointer;
+    font-family: 'Montserrat', sans-serif; font-size: 9px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase;
+    transition: all .2s ease; white-space: nowrap;
+  }
+  .log-btn:hover { background: var(--gold); border-color: var(--gold); color: #fff; }
+
+  /* ---------- Modal ---------- */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(10, 10, 10, .55); backdrop-filter: blur(3px);
+    display: flex; align-items: center; justify-content: center; padding: 24px;
+    opacity: 0; visibility: hidden; transition: opacity .25s ease, visibility .25s ease; z-index: 1000;
+  }
+  .modal-overlay.open { opacity: 1; visibility: visible; }
+  .modal {
+    background: var(--modal-bg); width: 100%; max-width: 560px; max-height: 82vh; display: flex; flex-direction: column;
+    border: 1px solid var(--hairline); box-shadow: 0 30px 70px -20px rgba(0,0,0,.4);
+    transform: translateY(12px); transition: transform .25s ease;
+  }
+  .modal-overlay.open .modal { transform: translateY(0); }
+  .modal-head {
+    display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+    background: #0D0D0D; color: #EEE9DC; padding: 22px 26px; border-bottom: 1px solid #2E2E2E;
+  }
+  .modal-title-wrap .eyebrow { color: var(--gold); margin-bottom: 5px; }
+  .modal-title-wrap h2 { font-size: 16px; font-weight: 600; letter-spacing: .06em; color: #F4F0E6; word-break: break-word; }
+  .modal-close {
+    background: transparent; border: none; color: #9A9487; font-size: 26px; line-height: 1; cursor: pointer;
+    font-family: 'Montserrat', sans-serif; padding: 0 4px; transition: color .2s ease;
+  }
+  .modal-close:hover { color: #fff; }
+  .modal-body { padding: 22px 26px 26px; overflow-y: auto; color: var(--ink); }
+  .log-entry { display: flex; gap: 14px; padding: 13px 2px; border-bottom: 1px solid var(--hairline); }
+  .log-entry:last-child { border-bottom: none; }
+  .log-badge { flex: none; align-self: flex-start; padding: 4px 10px; font-size: 8px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+  .log-badge.created { background: var(--gold); color: #fff; }
+  .log-badge.updated { background: #1E9E54; color: #fff; }
+  .log-badge.removed { background: var(--removed-bg); color: #fff; }
+  .log-badge.restored { background: #3b6ef6; color: #fff; }
+  .log-main { flex: 1; min-width: 0; }
+  .log-detail { font-size: 13px; color: var(--ink); font-weight: 500; word-break: break-word; }
+  .log-time { font-size: 10px; color: var(--muted); margin-top: 4px; letter-spacing: .03em; font-variant-numeric: tabular-nums; }
+
+  @media (max-width: 720px) {
+    .topbar-inner { padding: 20px; }
+    .wrap { padding: 24px 16px 50px; }
+    .brand h1 { font-size: 16px; }
+    .bar-label { width: 110px; }
+    .card { padding: 20px; }
+    .controls { gap: 18px; }
+    .search-box { max-width: none; }
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-mark">K</div>
+      <div>
+        <div class="eyebrow">K Estates</div>
+        <h1>Property Inventory</h1>
+        <div class="sub">Bookings &amp; Listing Intelligence &middot; Sales / Rental</div>
+      </div>
+    </div>
+    <div class="topbar-right">
+      <span id="last-updated"></span>
+      <button class="theme-btn" id="theme-btn" title="Switch theme (Light / Dark / System)">
+      <svg class="theme-ico theme-ico-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+      <svg class="theme-ico theme-ico-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <svg class="theme-ico theme-ico-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+    </button>
+      <button class="refresh-btn" id="refresh-btn">Refresh data</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div id="error" class="error-banner" style="display:none"></div>
+
+  <div class="tabs">
+    <button class="tab active" data-panel="panel-bookings">Bookings / Agent</button>
+    <button class="tab" data-panel="panel-listings">Listing Details</button>
+    <button class="tab" data-panel="panel-history">History &amp; Status</button>
+  </div>
+
+  <div class="controls">
+    <div>
+      <label>Period</label>
+      <select id="period">
+        <option value="all">All time</option>
+        <option value="7">Last 7 days</option>
+        <option value="30">Last 30 days</option>
+        <option value="90">Last 90 days</option>
+      </select>
+    </div>
+    <div>
+      <label>Agent</label>
+      <select id="agent-filter"><option value="all">All agents</option></select>
+    </div>
+    <div>
+      <label>Type</label>
+      <select id="type-filter">
+        <option value="all">All</option>
+        <option value="Sale">Sale</option>
+        <option value="Rent">Rent</option>
+      </select>
+    </div>
+    <div>
+      <label>Status</label>
+      <select id="status-filter">
+        <option value="all">All statuses</option>
+        <option value="active">Active</option>
+        <option value="removed">Removed</option>
+      </select>
+    </div>
+    <input type="text" id="search" class="search-box" placeholder="Search client, address, agent...">
+  </div>
+
+  <div id="loading" class="loading"><div class="spinner"></div><span>Loading bookings from database</span></div>
+
+  <div id="content" style="display:none">
+    <div id="panel-bookings" class="panel active">
+      <div class="stat-row">
+        <div class="stat"><div class="lbl">Total bookings</div><div class="num all" id="stat-total">0</div></div>
+        <div class="stat"><div class="lbl">Sale bookings</div><div class="num sale" id="stat-sale">0</div></div>
+        <div class="stat"><div class="lbl">Rental bookings</div><div class="num rent" id="stat-rent">0</div></div>
+        <div class="stat"><div class="lbl">Active agents</div><div class="num all" id="stat-agents">0</div></div>
+      </div>
+      <div class="card">
+        <h2>Bookings by Agent</h2>
+        <div class="hint">Viewing bookings attributed to each responsible agent for the selected period.</div>
+        <div id="bookings-chart"></div>
+        <div id="chart-empty" class="empty" style="display:none">No bookings match the selected filters.</div>
+      </div>
+    </div>
+
+    <div id="panel-listings" class="panel">
+      <div class="card">
+        <h2>Listing Details</h2>
+        <div class="hint">Client and property information for every viewing booking.</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Booking date</th>
+              <th>Client name</th>
+              <th>Client phone</th>
+              <th>Sale / Rent</th>
+              <th>Address</th>
+              <th>Responsible</th>
+              <th>Status</th>
+              <th>Listing</th>
+            </tr>
+          </thead>
+          <tbody id="details-body"></tbody>
+        </table>
+        <div id="details-empty" class="empty" style="display:none">No bookings match the selected filters.</div>
+      </div>
+    </div>
+
+    <div id="panel-history" class="panel">
+      <div class="stat-row">
+        <div class="stat"><div class="lbl">Active bookings</div><div class="num all" id="hist-active">0</div></div>
+        <div class="stat"><div class="lbl">Removed bookings</div><div class="num rent" id="hist-removed">0</div></div>
+        <div class="stat"><div class="lbl">Created events</div><div class="num sale" id="hist-created">0</div></div>
+        <div class="stat"><div class="lbl">Updated events</div><div class="num all" id="hist-updated">0</div></div>
+      </div>
+      <div class="card">
+        <h2>Booking Status &amp; History</h2>
+        <div class="hint">Tracked lifecycle of bookings detected from the CRM timeline &mdash; created, updated, removed, restored.</div>
+        <table>
+          <thead>
+            <tr>
+              <th>Listing</th>
+              <th>Client</th>
+              <th>Sale / Rent</th>
+              <th>Status</th>
+              <th>Created</th>
+              <th>Last change</th>
+              <th>Event log</th>
+            </tr>
+          </thead>
+          <tbody id="status-body"></tbody>
+        </table>
+        <div id="status-empty" class="empty" style="display:none">No bookings recorded yet. Run <code>node sync.js</code> to populate history.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="gen" id="generated"></div>
+</div>
+
+<script>
+const ENTITY_TYPE_ID = 1032;         // Property Inventory SPA (for CRM detail links)
+
+const state = { period: 'all', agent: 'all', type: 'all', search: '', status: 'all' };
+let DATA = null; // { bookings: [...], summary: [...], events: [...], meta: {...} }
+
+// ---------- Backend API ----------
+async function apiGet(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('API ' + url + ' failed (HTTP ' + res.status + ')');
+  return res.json();
+}
+
+// Loads booking history + status from the Node/SQLite backend (server.js)
+async function loadData() {
+  const payload = await apiGet('/api/status');
+
+  const bookings = (payload.bookings || []).map(b => ({
+    booking_date: (b.created_at || '').slice(0, 16),
+    created_at: b.created_at || '',
+    updated_at: b.updated_at || '',
+    activity_id: b.activity_id,
+    listing: b.listing || '',
+    owner_id: b.owner_id || '',
+    client_name: b.client_name || '',
+    client_phone: b.client_phone || '',
+    sale_rent: b.sale_rent || '',
+    address: b.address || '',
+    pipeline: b.pipeline || '',
+    responsible: b.responsible || 'Unknown',
+    status: b.status || 'active'
+  }));
+
+  return {
+    bookings: bookings,
+    summary: payload.summary || [],
+    events: payload.events || [],
+    meta: {
+      total_activities: bookings.length,
+      generated: new Date().toISOString()
+    }
+  };
+}
+
+// ---------- Rendering ----------
+const fmtDate = iso => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  const date = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  return date + ' · ' + time;
+};
+
+function inPeriod(dateStr, period) {
+  if (period === 'all') return true;
+  const d = new Date(dateStr);
+  if (isNaN(d)) return false;
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - parseInt(period, 10));
+  return d >= cutoff;
+}
+
+function filteredBookings() {
+  return DATA.bookings.filter(b => {
+    if (!inPeriod(b.booking_date, state.period)) return false;
+    if (state.agent !== 'all' && b.responsible !== state.agent) return false;
+    if (state.type !== 'all' && b.sale_rent !== state.type) return false;
+    if (state.status !== 'all' && b.status !== state.status) return false;
+    if (state.search) {
+      const q = state.search.toLowerCase();
+      const hay = (b.client_name + ' ' + b.client_phone + ' ' + b.address + ' ' + b.responsible + ' ' + b.listing + ' ' + b.pipeline).toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function renderStats(bookings) {
+  document.getElementById('stat-total').textContent = bookings.length;
+  document.getElementById('stat-sale').textContent = bookings.filter(b => b.sale_rent === 'Sale').length;
+  document.getElementById('stat-rent').textContent = bookings.filter(b => b.sale_rent === 'Rent').length;
+  document.getElementById('stat-agents').textContent = new Set(bookings.map(b => b.responsible)).size;
+}
+
+function renderChart(bookings) {
+  const counts = {};
+  bookings.forEach(b => { counts[b.responsible] = (counts[b.responsible] || 0) + 1; });
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const el = document.getElementById('bookings-chart');
+  const empty = document.getElementById('chart-empty');
+  if (!entries.length) { el.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  const max = entries[0][1];
+  el.innerHTML = entries.map(([agent, n], idx) => {
+    const pct = Math.max(8, Math.round((n / max) * 100));
+    return '<div class="bar-row" style="animation-delay:' + (idx * 60) + 'ms">' +
+      '<div class="bar-label" title="' + esc(agent) + '">' + esc(agent) + '</div>' +
+      '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%; transition-delay:' + (idx * 90) + 'ms">' + n + '</div></div>' +
+    '</div>';
+  }).join('');
+}
+
+function esc(s) {
+  return String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+}
+
+function cellText(v) {
+  const t = String(v || '').trim();
+  if (!t) return '<span class="muted-char">&mdash;</span>';
+  if (t.length > 46) return '<span title="' + esc(t) + '">' + esc(t.slice(0, 46)) + '&hellip;</span>';
+  return esc(t);
+}
+
+function crmLink(b) {
+  const id = String(b.owner_id || '').trim();
+  const label = b.listing || 'Open in CRM';
+  const text = esc(label.length > 30 ? label.slice(0, 30) + '&hellip;' : label);
+  if (!id) return '<span class="muted-char">' + text + '</span>';
+  const url = 'https://kestates.bitrix24.com/crm/type/' + ENTITY_TYPE_ID + '/details/' + encodeURIComponent(id) + '/';
+  return '<a href="' + url + '" target="_blank" rel="noopener" class="crm-link" title="Open ' + esc(label) + ' in CRM">' + text + '</a>';
+}
+
+const STATUS_LABELS = { active: 'Active', removed: 'Removed' };
+function statusBadge(status) {
+  const s = status || 'active';
+  return '<span class="badge-st ' + esc(s) + '">' + (STATUS_LABELS[s] || esc(s)) + '</span>';
+}
+
+function renderDetails(bookings) {
+  const body = document.getElementById('details-body');
+  const empty = document.getElementById('details-empty');
+  if (!bookings.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  body.innerHTML = bookings.map(b => {
+    const badge = b.sale_rent === 'Sale'
+      ? '<span class="badge sale">Sale</span>'
+      : '<span class="badge rent">Rent</span>';
+    return '<tr>' +
+      '<td>' + fmtDate(b.booking_date) + '</td>' +
+      '<td>' + cellText(b.client_name) + '</td>' +
+      '<td>' + cellText(b.client_phone) + '</td>' +
+      '<td>' + badge + '</td>' +
+      '<td>' + cellText(b.address) + '</td>' +
+      '<td>' + cellText(b.responsible) + '</td>' +
+      '<td>' + statusBadge(b.status) + '</td>' +
+      '<td>' + crmLink(b) + '</td>' +
+    '</tr>';
+  }).join('');
+}
+
+function renderAll() {
+  if (!DATA) return;
+  const bookings = filteredBookings();
+  renderStats(bookings);
+  renderChart(bookings);
+  renderDetails(bookings);
+  renderStatusStats();
+  renderHistory();
+}
+
+function renderStatusStats() {
+  const summary = {};
+  (DATA.summary || []).forEach(s => { summary[s.status] = s.count; });
+  const events = {};
+  (DATA.events || []).forEach(e => { events[e.event] = e.count; });
+  document.getElementById('hist-active').textContent = summary.active || 0;
+  document.getElementById('hist-removed').textContent = summary.removed || 0;
+  document.getElementById('hist-created').textContent = events.created || 0;
+  document.getElementById('hist-updated').textContent = (events.updated || 0) + (events.restored || 0);
+}
+
+function renderHistory() {
+  const body = document.getElementById('status-body');
+  const empty = document.getElementById('status-empty');
+  if (!DATA.bookings.length) { body.innerHTML = ''; empty.style.display = 'block'; return; }
+  empty.style.display = 'none';
+  body.innerHTML = DATA.bookings.map(b => {
+    const badge = b.sale_rent === 'Sale'
+      ? '<span class="badge sale">Sale</span>'
+      : '<span class="badge rent">Rent</span>';
+    return '<tr>' +
+      '<td>' + crmLink(b) + '</td>' +
+      '<td>' + cellText(b.client_name) + '</td>' +
+      '<td>' + badge + '</td>' +
+      '<td>' + statusBadge(b.status) + '</td>' +
+      '<td>' + fmtDate(b.created_at) + '</td>' +
+      '<td>' + fmtDate(b.updated_at) + '</td>' +
+      '<td><button class="log-btn" data-activity="' + esc(b.activity_id) + '" data-listing="' + esc(b.listing || b.client_name) + '">View log</button></td>' +
+    '</tr>';
+  }).join('');
+
+  body.querySelectorAll('.log-btn').forEach(btn => {
+    btn.addEventListener('click', () => openLogModal(btn.dataset.activity, btn.dataset.listing));
+  });
+}
+
+function openLogModal(activityId, label) {
+  const modal = document.getElementById('log-modal');
+  const bodyEl = document.getElementById('log-body');
+  const titleEl = document.getElementById('log-title');
+  document.getElementById('log-loading').style.display = 'flex';
+  bodyEl.innerHTML = '';
+  titleEl.textContent = label || 'Event log';
+  modal.classList.add('open');
+  document.body.style.overflow = 'hidden';
+
+  apiGet('/api/history?activity_id=' + encodeURIComponent(activityId))
+    .then(payload => {
+      document.getElementById('log-loading').style.display = 'none';
+      const log = payload.log || [];
+      if (!log.length) {
+        bodyEl.innerHTML = '<div class="empty">No recorded events for this booking.</div>';
+        return;
+      }
+      bodyEl.innerHTML = log.map(e => {
+        const cls = 'log-' + (esc(e.event));
+        return '<div class="log-entry">' +
+          '<span class="log-badge ' + cls + '">' + esc(e.event) + '</span>' +
+          '<div class="log-main">' +
+            '<div class="log-detail">' + esc(e.detail || '') + '</div>' +
+            '<div class="log-time">' + fmtDate(e.occurred_at) + '</div>' +
+          '</div>' +
+        '</div>';
+      }).join('');
+    })
+    .catch(err => {
+      document.getElementById('log-loading').style.display = 'none';
+      bodyEl.innerHTML = '<div class="empty">Error loading log: ' + esc(err.message || String(err)) + '</div>';
+    });
+}
+
+function closeLogModal() {
+  document.getElementById('log-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function setupControls() {
+  const agents = [...new Set(DATA.bookings.map(b => b.responsible).filter(v => v !== 'Unknown'))].sort();
+  const sel = document.getElementById('agent-filter');
+  sel.innerHTML = '<option value="all">All agents</option>' + agents.map(a => '<option value="' + esc(a) + '">' + esc(a) + '</option>').join('');
+
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      document.getElementById(t.dataset.panel).classList.add('active');
+    });
+  });
+  document.getElementById('period').addEventListener('change', e => { state.period = e.target.value; renderAll(); });
+  document.getElementById('agent-filter').addEventListener('change', e => { state.agent = e.target.value; renderAll(); });
+  document.getElementById('type-filter').addEventListener('change', e => { state.type = e.target.value; renderAll(); });
+  document.getElementById('status-filter').addEventListener('change', e => { state.status = e.target.value; renderAll(); });
+  document.getElementById('search').addEventListener('input', e => { state.search = e.target.value.trim(); renderAll(); });
+}
+
+function showError(msg) {
+  const el = document.getElementById('error');
+  el.textContent = 'Unable to load data \u2014 ' + msg + '. Is the backend running? Run: node server.js';
+  el.style.display = 'block';
+  document.getElementById('loading').style.display = 'none';
+}
+
+function setLoading(on) {
+  document.getElementById('loading').style.display = on ? 'flex' : 'none';
+  document.getElementById('content').style.display = on ? 'none' : 'block';
+}
+
+async function load() {
+  const btn = document.getElementById('refresh-btn');
+  btn.disabled = true;
+  btn.textContent = 'Loading...';
+  document.getElementById('error').style.display = 'none';
+  setLoading(true);
+  try {
+    DATA = await loadData();
+    setupControls();
+    renderAll();
+    document.getElementById('last-updated').textContent = 'Updated ' + fmtDate(DATA.meta.generated);
+    document.getElementById('generated').textContent =
+      'Source: Bitrix24 \u00b7 ' + DATA.meta.total_activities + ' bookings tracked \u00b7 ' + DATA.events.length + ' status events';
+  } catch (err) {
+    console.error(err);
+    showError(err.message || String(err));
+  } finally {
+    setLoading(false);
+    btn.disabled = false;
+    btn.textContent = 'Refresh data';
+  }
+}
+
+const THEME_CYCLE = ['light', 'dark', 'system'];
+const THEME_LABELS = { light: 'Light', dark: 'Dark', system: 'System' };
+
+function applyTheme(mode) {
+  const root = document.documentElement;
+  if (mode === 'system') {
+    root.removeAttribute('data-theme');
+    const sysDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    root.style.colorScheme = sysDark ? 'dark' : 'light';
+  } else {
+    root.setAttribute('data-theme', mode);
+    root.style.colorScheme = mode;
+  }
+}
+
+function setThemeBtn(mode) {
+  document.getElementById('theme-btn').setAttribute('data-mode', mode);
+  document.getElementById('theme-btn').title = 'Switch theme (Light / Dark / System) \u2014 currently ' + THEME_LABELS[mode];
+}
+
+function cycleTheme() {
+  const current = localStorage.getItem('k-theme') || 'light';
+  const next = THEME_CYCLE[(THEME_CYCLE.indexOf(current) + 1) % THEME_CYCLE.length];
+  localStorage.setItem('k-theme', next);
+  applyTheme(next);
+  setThemeBtn(next);
+}
+
+(function initTheme() {
+  const saved = localStorage.getItem('k-theme');
+  const mode = saved && THEME_CYCLE.includes(saved) ? saved : 'light';
+  applyTheme(mode);
+  setThemeBtn(mode);
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    const cur = localStorage.getItem('k-theme') || 'light';
+    if (cur === 'system') { applyTheme('system'); setThemeBtn('system'); }
+  });
+})();
+
+document.getElementById('theme-btn').addEventListener('click', cycleTheme);
+
+document.getElementById('refresh-btn').addEventListener('click', load);
+load();
+</script>
+
+<!-- Log Modal -->
+<div id="log-modal" class="modal-overlay" onclick="if(event.target===this)closeLogModal()">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title-wrap">
+        <div class="eyebrow">Booking history</div>
+        <h2 id="log-title"></h2>
+      </div>
+      <button class="modal-close" onclick="closeLogModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="log-loading" class="loading"><div class="spinner"></div><span>Loading history</span></div>
+      <div id="log-body"></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

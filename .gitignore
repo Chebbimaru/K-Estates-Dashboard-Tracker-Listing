@@ -1,0 +1,11 @@
+# OpenCode local config (contains MCP endpoints)
+opencode.json
+
+# Dependencies
+node_modules/
+
+# Local database (contains CRM data)
+data/
+
+# macOS
+.DS_Store
