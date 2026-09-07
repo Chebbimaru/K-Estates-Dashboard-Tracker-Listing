@@ -5,6 +5,7 @@ Dashboard for tracking property viewing bookings from the K Estates Bitrix24 CRM
 ## Features
 
 - **Booking / Agent stats** — KPI cards and per-agent viewing charts (Sales vs Rental)
+- **Booking Calendar** — month grid of bookings with sale/rent dots and per-day counts; navigate by month/year or jump to today; click a day to see its bookings and CRM links
 - **Listing Details** — full booking table with CRM links
 - **History & Status** — current booking status (active/removed) plus an append-only event log (created / updated / restored / removed) viewable per booking in a modal
 - **Light / Dark / System theme** — icon toggle in the header, persisted in `localStorage`
@@ -17,18 +18,18 @@ Bitrix24 CRM  →  sync.js  →  data/bookings.db (SQLite)  →  server.js REST 
 
 - `sync.js` — polls Bitrix24 viewing activities and diffs them into the database. Uses an **incoming** webhook, which cannot bind events, so status tracking is diff-based `created` / `updated` / `restored` / `removed`.
 - `db.js` — better-sqlite3 wrapper (WAL mode). Tables: `bookings`, `status_log`.
-- `server.js` — plain Node `http` server (no Express). Serves `index.html` at `/` and JSON under `/api/*`.
+- `server.js` — plain Node `http` server (no Express). Serves `index.html` at `/` and JSON under `/api/*`. Gzip-compresses responses over 1 KB and caches the dashboard HTML (invalidated on file mtime change).
 - `index.html` — self-contained single file (inline CSS/JS). All data comes from the backend API.
 
 ## Getting Started
 
 ```bash
 npm install
-npm start          # dashboard at http://localhost:3000
+npm start          # dashboard at http://localhost:3055
 npm run sync       # pull latest bookings from Bitrix24 into SQLite
 ```
 
-The server runs on port 3000 by default (`PORT` env to override). The database is auto-created at `data/bookings.db` (`DB_PATH` env to override). Restart `server.js` after editing it; HTML edits are picked up on refresh.
+The server runs on port 3055 by default (`PORT` env to override). The database is auto-created at `data/bookings.db` (`DB_PATH` env to override). Restart `server.js` after editing it; HTML edits are picked up on refresh.
 
 > Note: `npm run sync` is on-demand. Hook it up to a cron job if you want history to stay current automatically.
 
