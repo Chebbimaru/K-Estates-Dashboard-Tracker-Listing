@@ -4,6 +4,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "dev": "nodemon server.js",
     "sync": "node sync.js"
   },
   "keywords": [],
@@ -12,5 +13,8 @@
   "description": "",
   "dependencies": {
     "better-sqlite3": "^12.11.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
   }
 }
