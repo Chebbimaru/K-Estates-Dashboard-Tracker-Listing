@@ -9,10 +9,16 @@ const {
   getStatusEvents,
   getAgentSummary,
   getLog,
+  createSession,
+  getSession,
+  deleteSession,
+  deleteExpiredSessions,
 } = require('./db');
+const { verifyPassword, generateSessionToken, SESSION_DURATION_MS } = require('./auth');
 
 const PORT = process.env.PORT || 3055;
 const DASHBOARD = path.join(__dirname, 'index.html');
+const LOGIN_PAGE = path.join(__dirname, 'login.html');
 const COMPRESS_THRESHOLD = 1024;
 
 let dashboardCache = null; // { mtimeMs, content }
@@ -24,15 +30,24 @@ function getDashboardHtml() {
   return dashboardCache.content;
 }
 
-function send(req, res, code, data) {
+let loginCache = null; // { mtimeMs, content }
+function getLoginHtml() {
+  const stat = fs.statSync(LOGIN_PAGE);
+  if (!loginCache || loginCache.mtimeMs !== stat.mtimeMs) {
+    loginCache = { mtimeMs: stat.mtimeMs, content: fs.readFileSync(LOGIN_PAGE, 'utf-8') };
+  }
+  return loginCache.content;
+}
+
+function send(req, res, code, data, extraHeaders) {
   const body = Buffer.from(typeof data === 'string' ? data : JSON.stringify(data), 'utf-8');
-  const headers = {
+  const headers = Object.assign({
     'Content-Type': typeof data === 'string'
       ? 'text/html; charset=utf-8'
       : 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
     'Access-Control-Allow-Origin': '*',
-  };
+  }, extraHeaders);
 
   const acceptEncoding = req.headers['accept-encoding'] || '';
   if (body.length > COMPRESS_THRESHOLD && acceptEncoding.includes('gzip')) {
@@ -59,13 +74,67 @@ function readBody(req) {
   });
 }
 
+function parseCookies(req) {
+  const header = req.headers.cookie || '';
+  const cookies = {};
+  header.split(';').forEach(pair => {
+    const idx = pair.indexOf('=');
+    if (idx === -1) return;
+    const key = pair.slice(0, idx).trim();
+    const val = pair.slice(idx + 1).trim();
+    if (key) cookies[key] = decodeURIComponent(val);
+  });
+  return cookies;
+}
+
+function getSessionFromRequest(req) {
+  const token = parseCookies(req).session_token;
+  if (!token) return null;
+  deleteExpiredSessions();
+  const session = getSession(token);
+  if (!session) return null;
+  if (new Date(session.expires_at).getTime() <= Date.now()) return null;
+  return session;
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost:${PORT}`);
   const p = url.pathname;
 
   try {
+    if (req.method === 'GET' && p === '/login') {
+      return send(req, res, 200, getLoginHtml());
+    }
+
+    if (req.method === 'POST' && p === '/api/login') {
+      const body = await readBody(req);
+      const { username, password } = body;
+      if (!username || !password) return send(req, res, 400, { error: 'username and password are required' });
+      if (!verifyPassword(username, password)) return send(req, res, 401, { error: 'Invalid username or password' });
+      const token = generateSessionToken();
+      const now = new Date();
+      const expiresAt = new Date(now.getTime() + SESSION_DURATION_MS);
+      createSession(token, now.toISOString(), expiresAt.toISOString());
+      return send(req, res, 200, { ok: true }, {
+        'Set-Cookie': `session_token=${token}; HttpOnly; Path=/; Max-Age=${Math.floor(SESSION_DURATION_MS / 1000)}; SameSite=Lax`,
+      });
+    }
+
+    if (req.method === 'POST' && p === '/api/logout') {
+      const token = parseCookies(req).session_token;
+      if (token) deleteSession(token);
+      return send(req, res, 200, { ok: true }, {
+        'Set-Cookie': 'session_token=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax',
+      });
+    }
+
+    if (p.startsWith('/api/') && p !== '/api/login' && !getSessionFromRequest(req)) {
+      return send(req, res, 401, { error: 'Unauthorized' });
+    }
+
     if (req.method === 'GET' && p === '/') {
-      return send(req, res, 200, getDashboardHtml());
+      const session = getSessionFromRequest(req);
+      return send(req, res, 200, session ? getDashboardHtml() : getLoginHtml());
     }
 
     if (req.method === 'GET' && p === '/api/bookings') {
