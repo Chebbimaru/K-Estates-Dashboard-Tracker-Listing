@@ -263,7 +263,7 @@
   .cal-cell.has-bookings:hover { background: var(--gold-soft); border-color: var(--gold); }
   .cal-cell.today .cal-daynum { color: var(--gold); font-weight: 700; }
   .cal-daynum { font-size: 11px; font-weight: 600; color: var(--ink); font-variant-numeric: tabular-nums; }
-  .cal-count { font-size: 15px; font-weight: 200; margin-top: auto; font-variant-numeric: tabular-nums; }
+  .cal-count { font-size: 15px; font-weight: 200; margin-top: auto; align-self: flex-end; font-variant-numeric: tabular-nums; }
   .cal-dots { display: flex; gap: 4px; position: absolute; top: 8px; right: 8px; }
   .cal-dot { width: 6px; height: 6px; border-radius: 50%; }
   .cal-dot.sale { background: #1E9E54; }
@@ -321,6 +321,9 @@
       <label>Period</label>
       <select id="period">
         <option value="all">All time</option>
+        <option value="yesterday">Yesterday</option>
+        <option value="today">Today</option>
+        <option value="tomorrow">Tomorrow</option>
         <option value="7">Last 7 days</option>
         <option value="30">Last 30 days</option>
         <option value="90">Last 90 days</option>
@@ -500,6 +503,14 @@ function inPeriod(dateStr, period) {
   if (period === 'all') return true;
   const d = new Date(dateStr);
   if (isNaN(d)) return false;
+  if (period === 'today' || period === 'tomorrow' || period === 'yesterday') {
+    const target = new Date();
+    if (period === 'tomorrow') target.setDate(target.getDate() + 1);
+    if (period === 'yesterday') target.setDate(target.getDate() - 1);
+    return d.getFullYear() === target.getFullYear() &&
+      d.getMonth() === target.getMonth() &&
+      d.getDate() === target.getDate();
+  }
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - parseInt(period, 10));
   return d >= cutoff;
@@ -660,6 +671,7 @@ function renderCalendar(bookings) {
 
   const dayMap = {};
   bookings.forEach(b => {
+    if (b.status === 'removed') return;
     const key = (b.booking_date || '').slice(0, 10);
     if (!key) return;
     (dayMap[key] = dayMap[key] || []).push(b);
@@ -812,11 +824,13 @@ function closeLogModal() {
   document.body.style.overflow = '';
 }
 
-function setupControls() {
+function populateAgentOptions() {
   const agents = [...new Set(DATA.bookings.map(b => b.responsible).filter(v => v !== 'Unknown'))].sort();
   const sel = document.getElementById('agent-filter');
   sel.innerHTML = '<option value="all">All agents</option>' + agents.map(a => '<option value="' + esc(a) + '">' + esc(a) + '</option>').join('');
+}
 
+function wireControls() {
   document.querySelectorAll('.tab').forEach(t => {
     t.addEventListener('click', () => {
       document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
@@ -831,7 +845,6 @@ function setupControls() {
   document.getElementById('status-filter').addEventListener('change', e => { state.status = e.target.value; renderAll(); });
   document.getElementById('search').addEventListener('input', debounce(e => { state.search = e.target.value.trim(); renderAll(); }, 150));
 
-  populateCalendarSelects();
   document.getElementById('cal-prev').addEventListener('click', () => shiftCalendar(-1));
   document.getElementById('cal-next').addEventListener('click', () => shiftCalendar(1));
   document.getElementById('cal-today').addEventListener('click', goToCurrentMonth);
@@ -865,7 +878,8 @@ async function load() {
   setLoading(true);
   try {
     DATA = await loadData();
-    setupControls();
+    populateAgentOptions();
+    populateCalendarSelects();
     renderAll();
     document.getElementById('last-updated').textContent = 'Updated ' + fmtDate(DATA.meta.generated);
     document.getElementById('generated').textContent =
@@ -922,6 +936,7 @@ function cycleTheme() {
 document.getElementById('theme-btn').addEventListener('click', cycleTheme);
 
 document.getElementById('refresh-btn').addEventListener('click', load);
+wireControls();
 load();
 </script>
 
