@@ -36,6 +36,12 @@ db.exec(`
     occurred_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS sessions (
+    token TEXT PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
   CREATE INDEX IF NOT EXISTS idx_bookings_responsible ON bookings(responsible);
   CREATE INDEX IF NOT EXISTS idx_statuslog_activity ON status_log(activity_id);
@@ -90,6 +96,16 @@ const AGENT_SUMMARY = db.prepare(`
   SELECT responsible, status, COUNT(*) AS count
   FROM bookings GROUP BY responsible, status
 `);
+
+const INSERT_SESSION = db.prepare(`
+  INSERT INTO sessions (token, created_at, expires_at) VALUES (?, ?, ?)
+`);
+
+const GET_SESSION = db.prepare(`SELECT * FROM sessions WHERE token = ?`);
+
+const DELETE_SESSION = db.prepare(`DELETE FROM sessions WHERE token = ?`);
+
+const DELETE_EXPIRED_SESSIONS = db.prepare(`DELETE FROM sessions WHERE expires_at <= ?`);
 
 function upsertBooking(b, now) {
   const existing = GET_BOOKING.get(b.activity_id);
@@ -157,6 +173,22 @@ function getAgentSummary() {
   return AGENT_SUMMARY.all();
 }
 
+function createSession(token, createdAt, expiresAt) {
+  INSERT_SESSION.run(token, createdAt, expiresAt);
+}
+
+function getSession(token) {
+  return GET_SESSION.get(token);
+}
+
+function deleteSession(token) {
+  DELETE_SESSION.run(token);
+}
+
+function deleteExpiredSessions() {
+  DELETE_EXPIRED_SESSIONS.run(new Date().toISOString());
+}
+
 module.exports = {
   db,
   upsertBooking,
@@ -168,4 +200,8 @@ module.exports = {
   getStatusSummary,
   getStatusEvents,
   getAgentSummary,
+  createSession,
+  getSession,
+  deleteSession,
+  deleteExpiredSessions,
 };
