@@ -302,6 +302,7 @@
       <svg class="theme-ico theme-ico-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
     </button>
       <button class="refresh-btn" id="refresh-btn">Refresh data</button>
+      <button class="refresh-btn" id="logout-btn">Logout</button>
     </div>
   </div>
 </header>
@@ -454,6 +455,10 @@ let CALENDAR_DAY_MAP = {}; // 'YYYY-MM-DD' -> bookings on that day, for the curr
 // ---------- Backend API ----------
 async function apiGet(url) {
   const res = await fetch(url);
+  if (res.status === 401) {
+    window.location.href = '/login';
+    return new Promise(() => {}); // navigation is underway; don't let callers handle a real response
+  }
   if (!res.ok) throw new Error('API ' + url + ' failed (HTTP ' + res.status + ')');
   return res.json();
 }
@@ -936,6 +941,10 @@ function cycleTheme() {
 document.getElementById('theme-btn').addEventListener('click', cycleTheme);
 
 document.getElementById('refresh-btn').addEventListener('click', load);
+document.getElementById('logout-btn').addEventListener('click', async () => {
+  await fetch('/api/logout', { method: 'POST' });
+  window.location.href = '/login';
+});
 wireControls();
 load();
 </script>
