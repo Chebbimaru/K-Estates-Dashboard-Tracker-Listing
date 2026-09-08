@@ -120,16 +120,16 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    if (p.startsWith('/api/') && p !== '/api/login' && !getSessionFromRequest(req)) {
+      return send(req, res, 401, { error: 'Unauthorized' });
+    }
+
     if (req.method === 'POST' && p === '/api/logout') {
       const token = parseCookies(req).session_token;
       if (token) deleteSession(token);
       return send(req, res, 200, { ok: true }, {
         'Set-Cookie': 'session_token=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax',
       });
-    }
-
-    if (p.startsWith('/api/') && p !== '/api/login' && !getSessionFromRequest(req)) {
-      return send(req, res, 401, { error: 'Unauthorized' });
     }
 
     if (req.method === 'GET' && p === '/') {
