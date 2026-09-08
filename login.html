@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sign in — Property Inventory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@200;300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #F5F3EE;
+    --card: #FFFFFF;
+    --ink: #171717;
+    --muted: #8C8678;
+    --hairline: #E7E1D3;
+    --gold: #B08D3E;
+    --control-line: #C9C2B2;
+    --shadow: 0 2px 6px rgba(20, 16, 8, .05), 0 20px 44px -24px rgba(20, 16, 8, .18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #131310;
+      --card: #1D1C18;
+      --ink: #ECE6D8;
+      --muted: #9A9386;
+      --hairline: #2E2C27;
+      --gold: #C9A950;
+      --control-line: #4A463C;
+      --shadow: 0 2px 8px rgba(0, 0, 0, .45), 0 24px 60px -24px rgba(0, 0, 0, .7);
+    }
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { -webkit-font-smoothing: antialiased; }
+  body {
+    font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg); color: var(--ink); font-size: 14px; line-height: 1.5;
+    border-top: 3px solid var(--gold);
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  }
+  .login-card {
+    background: var(--card); border: 1px solid var(--hairline); box-shadow: var(--shadow);
+    padding: 40px 36px; width: 100%; max-width: 360px;
+  }
+  .eyebrow { font-size: 10px; letter-spacing: .32em; text-transform: uppercase; color: var(--gold); font-weight: 600; margin-bottom: 8px; }
+  h1 { font-size: 18px; font-weight: 600; letter-spacing: .08em; margin-bottom: 26px; }
+  label { display: block; font-size: 9px; letter-spacing: .24em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; font-weight: 600; }
+  .field { margin-bottom: 20px; }
+  input {
+    width: 100%; padding: 10px 0; border: none; border-bottom: 1px solid var(--control-line); background: transparent;
+    font-family: 'Montserrat', sans-serif; font-size: 14px; color: var(--ink); outline: none;
+    transition: border-color .25s ease;
+  }
+  input:focus { border-bottom-color: var(--gold); }
+  button {
+    width: 100%; margin-top: 8px; padding: 12px; border: 1px solid var(--ink); background: var(--ink); color: var(--bg);
+    font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase;
+    cursor: pointer; transition: opacity .2s ease;
+  }
+  button:disabled { opacity: .5; cursor: wait; }
+  .error { color: #C0392B; font-size: 12px; margin-top: 14px; display: none; }
+</style>
+</head>
+<body>
+  <form class="login-card" id="login-form">
+    <div class="eyebrow">K Estates</div>
+    <h1>Sign in to Property Inventory</h1>
+    <div class="field">
+      <label for="username">Username</label>
+      <input type="text" id="username" name="username" autocomplete="username" required>
+    </div>
+    <div class="field">
+      <label for="password">Password</label>
+      <input type="password" id="password" name="password" autocomplete="current-password" required>
+    </div>
+    <button type="submit" id="submit-btn">Sign in</button>
+    <div class="error" id="login-error"></div>
+  </form>
+
+<script>
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('submit-btn');
+  const errorEl = document.getElementById('login-error');
+  errorEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Signing in...';
+  try {
+    const res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: document.getElementById('username').value,
+        password: document.getElementById('password').value,
+      }),
+    });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload.error || 'Sign in failed');
+    window.location.href = '/';
+  } catch (err) {
+    errorEl.textContent = err.message;
+    errorEl.style.display = 'block';
+    btn.disabled = false;
+    btn.textContent = 'Sign in';
+  }
+});
+</script>
+</body>
+</html>
