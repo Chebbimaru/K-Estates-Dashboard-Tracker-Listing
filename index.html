@@ -942,8 +942,11 @@ document.getElementById('theme-btn').addEventListener('click', cycleTheme);
 
 document.getElementById('refresh-btn').addEventListener('click', load);
 document.getElementById('logout-btn').addEventListener('click', async () => {
-  await fetch('/api/logout', { method: 'POST' });
-  window.location.href = '/login';
+  try {
+    await fetch('/api/logout', { method: 'POST' });
+  } finally {
+    window.location.href = '/login';
+  }
 });
 wireControls();
 load();

@@ -46,7 +46,6 @@ function send(req, res, code, data, extraHeaders) {
       ? 'text/html; charset=utf-8'
       : 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
-    'Access-Control-Allow-Origin': '*',
   }, extraHeaders);
 
   const acceptEncoding = req.headers['accept-encoding'] || '';
@@ -65,9 +64,18 @@ function send(req, res, code, data, extraHeaders) {
 }
 
 function readBody(req) {
+  const MAX_BODY_BYTES = 64 * 1024;
   return new Promise((resolve) => {
     let data = '';
-    req.on('data', c => (data += c));
+    let tooLarge = false;
+    req.on('data', c => {
+      if (tooLarge) return;
+      data += c;
+      if (data.length > MAX_BODY_BYTES) {
+        tooLarge = true;
+        data = '';
+      }
+    });
     req.on('end', () => {
       try { resolve(data ? JSON.parse(data) : {}); } catch { resolve({}); }
     });
@@ -82,7 +90,12 @@ function parseCookies(req) {
     if (idx === -1) return;
     const key = pair.slice(0, idx).trim();
     const val = pair.slice(idx + 1).trim();
-    if (key) cookies[key] = decodeURIComponent(val);
+    if (!key) return;
+    try {
+      cookies[key] = decodeURIComponent(val);
+    } catch {
+      cookies[key] = val;
+    }
   });
   return cookies;
 }
@@ -109,7 +122,9 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && p === '/api/login') {
       const body = await readBody(req);
       const { username, password } = body;
-      if (!username || !password) return send(req, res, 400, { error: 'username and password are required' });
+      if (typeof username !== 'string' || typeof password !== 'string' || !username || !password) {
+        return send(req, res, 400, { error: 'username and password are required' });
+      }
       if (!verifyPassword(username, password)) return send(req, res, 401, { error: 'Invalid username or password' });
       const token = generateSessionToken();
       const now = new Date();
@@ -167,7 +182,8 @@ const server = http.createServer(async (req, res) => {
 
     send(req, res, 404, { error: 'Not found' });
   } catch (err) {
-    send(req, res, 500, { error: err.message });
+    console.error(err);
+    send(req, res, 500, { error: 'Internal server error' });
   }
 });
 
