@@ -5,6 +5,13 @@ const Database = require('better-sqlite3');
 const DATA_DIR = path.join(__dirname, 'data');
 const DB_PATH = process.env.DB_PATH || path.join(DATA_DIR, 'bookings.db');
 
+// Seed values for the initial admin credential row (only used the very first
+// time the credentials table is empty; subsequent password changes replace
+// them in the DB via updateCredentials).
+const SEED_ADMIN_USERNAME = 'admin';
+const SEED_ADMIN_SALT = 'ec422f7b8f5d960e0eb635a0afdebeef';
+const SEED_ADMIN_HASH = '6671535daa3af5a1b8cf768607832d1baceebf9c1dd93a456f9002940089de9557dabce43a3f9a507e992956e8c87d5fcb73d3b1993dea510a3859d42ef9a606';
+
 if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
 
 const db = new Database(DB_PATH);
@@ -25,7 +32,8 @@ db.exec(`
     pipeline TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'active'
+    status TEXT NOT NULL DEFAULT 'active',
+    sales_department INTEGER NOT NULL DEFAULT 0
   );
 
   CREATE TABLE IF NOT EXISTS status_log (
@@ -42,18 +50,40 @@ db.exec(`
     expires_at TEXT NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS credentials (
+    username TEXT PRIMARY KEY,
+    salt TEXT NOT NULL,
+    hash TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
   CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
   CREATE INDEX IF NOT EXISTS idx_bookings_responsible ON bookings(responsible);
   CREATE INDEX IF NOT EXISTS idx_statuslog_activity ON status_log(activity_id);
 `);
 
+// Additive migration for DBs created before sales_department existed.
+const hasSalesDeptColumn = db.prepare(`PRAGMA table_info(bookings)`).all()
+  .some(col => col.name === 'sales_department');
+if (!hasSalesDeptColumn) {
+  db.exec(`ALTER TABLE bookings ADD COLUMN sales_department INTEGER NOT NULL DEFAULT 0`);
+}
+
+// Seed the admin credential row from the hardcoded defaults on first run,
+// so existing logins keep working without forcing an immediate change.
+if (db.prepare('SELECT COUNT(*) AS n FROM credentials').get().n === 0) {
+  db.prepare(`
+    INSERT INTO credentials (username, salt, hash, updated_at) VALUES (?, ?, ?, ?)
+  `).run(SEED_ADMIN_USERNAME, SEED_ADMIN_SALT, SEED_ADMIN_HASH, new Date().toISOString());
+}
+
 const INSERT_BOOKING = db.prepare(`
   INSERT INTO bookings
     (activity_id, owner_id, listing, client_name, client_phone, sale_rent,
-     address, responsible, pipeline, created_at, updated_at, status)
+     address, responsible, pipeline, created_at, updated_at, status, sales_department)
   VALUES
     (@activity_id, @owner_id, @listing, @client_name, @client_phone, @sale_rent,
-     @address, @responsible, @pipeline, @created_at, @updated_at, @status)
+     @address, @responsible, @pipeline, @created_at, @updated_at, @status, @sales_department)
 `);
 
 const GET_BOOKING = db.prepare(`SELECT * FROM bookings WHERE activity_id = ?`);
@@ -63,7 +93,7 @@ const UPDATE_BOOKING = db.prepare(`
     owner_id = @owner_id, listing = @listing, client_name = @client_name,
     client_phone = @client_phone, sale_rent = @sale_rent, address = @address,
     responsible = @responsible, pipeline = @pipeline,
-    updated_at = @updated_at, status = @status
+    updated_at = @updated_at, status = @status, sales_department = @sales_department
   WHERE activity_id = @activity_id
 `);
 
@@ -107,6 +137,13 @@ const DELETE_SESSION = db.prepare(`DELETE FROM sessions WHERE token = ?`);
 
 const DELETE_EXPIRED_SESSIONS = db.prepare(`DELETE FROM sessions WHERE expires_at <= ?`);
 
+const GET_CREDENTIALS = db.prepare(`SELECT * FROM credentials WHERE username = ?`);
+
+const UPSERT_CREDENTIALS = db.prepare(`
+  INSERT INTO credentials (username, salt, hash, updated_at) VALUES (@username, @salt, @hash, @updated_at)
+  ON CONFLICT(username) DO UPDATE SET salt = excluded.salt, hash = excluded.hash, updated_at = excluded.updated_at
+`);
+
 function upsertBooking(b, now) {
   const existing = GET_BOOKING.get(b.activity_id);
   if (!existing) {
@@ -116,7 +153,7 @@ function upsertBooking(b, now) {
   }
 
   const fields = ['owner_id', 'listing', 'client_name', 'client_phone', 'sale_rent',
-                  'address', 'responsible', 'pipeline'];
+                  'address', 'responsible', 'pipeline', 'sales_department'];
   const changed = fields.filter(f => (existing[f] || '') !== (b[f] || ''));
   const wasRemoved = existing.status === 'removed';
   const status = wasRemoved ? 'active' : 'active';
@@ -189,6 +226,14 @@ function deleteExpiredSessions() {
   DELETE_EXPIRED_SESSIONS.run(new Date().toISOString());
 }
 
+function getCredentials(username) {
+  return GET_CREDENTIALS.get(username);
+}
+
+function updateCredentials(username, salt, hash) {
+  UPSERT_CREDENTIALS.run({ username, salt, hash, updated_at: new Date().toISOString() });
+}
+
 module.exports = {
   db,
   upsertBooking,
@@ -204,4 +249,6 @@ module.exports = {
   getSession,
   deleteSession,
   deleteExpiredSessions,
+  getCredentials,
+  updateCredentials,
 };

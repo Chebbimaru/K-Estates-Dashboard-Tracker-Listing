@@ -5,7 +5,7 @@ const {
   getStatusSummary,
 } = require('./db');
 
-const WEBHOOK = process.env.WEBHOOK || 'https://kestates.bitrix24.com/rest/25113/eufjex37d22mug4s/';
+const WEBHOOK = process.env.WEBHOOK || 'https://kestates.bitrix24.com/rest/25113/j10najl3oflt3b4p/';
 const ENTITY_TYPE_ID = 1032;   // Property Inventory SPA
 const RENTAL_CATEGORY_ID = 57;
 
@@ -17,6 +17,7 @@ const F = {
   ASSIGNED: 'assignedById',
 };
 const SALE_RENT_MAP = { 13605: 'Sale', 13607: 'Rent' };
+const SALES_DEPARTMENT_ID = 5; // verified live against user.get -> UF_DEPARTMENT
 
 async function callApi(method, params) {
   const res = await fetch(WEBHOOK + method, {
@@ -72,16 +73,20 @@ async function batchGetItems(ids) {
   return items;
 }
 
-async function fetchUserNames(ids) {
+async function fetchUsers(ids) {
   const unique = [...new Set(ids.map(String).filter(Boolean))];
   const names = {};
-  if (!unique.length) return names;
+  const salesDeptIds = new Set();
+  if (!unique.length) return { names, salesDeptIds };
   const res = await callApi('user.get', { ID: unique });
   (res.result || []).forEach(u => {
     const name = [u.NAME, u.LAST_NAME].filter(Boolean).join(' ').trim() || u.LOGIN || u.ID;
     names[String(u.ID)] = name;
+    if ((u.UF_DEPARTMENT || []).map(Number).includes(SALES_DEPARTMENT_ID)) {
+      salesDeptIds.add(String(u.ID));
+    }
   });
-  return names;
+  return { names, salesDeptIds };
 }
 
 async function buildBookings() {
@@ -96,7 +101,7 @@ async function buildBookings() {
     }));
 
   const items = await batchGetItems(viewings.map(v => v.ownerId));
-  const userNames = await fetchUserNames(Object.values(items).map(i => i[F.ASSIGNED]));
+  const { names: userNames, salesDeptIds } = await fetchUsers(Object.values(items).map(i => i[F.ASSIGNED]));
 
   const bookings = {};
   for (const v of viewings) {
@@ -104,6 +109,7 @@ async function buildBookings() {
     const categoryId = String(item.categoryId || '');
     const saleRent = SALE_RENT_MAP[String(item[F.SALE_RENT] || '')] ||
       (categoryId === String(RENTAL_CATEGORY_ID) ? 'Rent' : 'Sale');
+    const assignedId = String(item[F.ASSIGNED] || '');
     bookings[v.activityId] = {
       activity_id: v.activityId,
       owner_id: v.ownerId,
@@ -113,7 +119,8 @@ async function buildBookings() {
       sale_rent: saleRent,
       address: String(item[F.ADDRESS] || ''),
       pipeline: categoryId === String(RENTAL_CATEGORY_ID) ? 'Rental Listings' : 'Sales Listings',
-      responsible: userNames[String(item[F.ASSIGNED] || '')] || 'Unknown',
+      responsible: userNames[assignedId] || 'Unknown',
+      sales_department: salesDeptIds.has(assignedId) ? 1 : 0,
     };
   }
   return bookings;
