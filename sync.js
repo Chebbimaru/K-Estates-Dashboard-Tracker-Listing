@@ -130,17 +130,21 @@ async function buildCalendarEvents() {
     }
     for (const ev of raw) {
       const eventId = agent.id + ':' + String(ev.ID);
-      events[eventId] = {
-        event_id: eventId,
-        owner_id: agent.id,
-        owner_name: agent.name,
-        name: String(ev.NAME || ''),
-        date_from: new Date(Number(ev.DATE_FROM_TS_UTC) * 1000).toISOString(),
-        date_to: ev.DATE_TO_TS_UTC ? new Date(Number(ev.DATE_TO_TS_UTC) * 1000).toISOString() : '',
-        all_day: ev.DT_SKIP_TIME === 'Y' ? 1 : 0,
-        location: String(ev.LOCATION || ''),
-        is_recurring: (ev.RRULE && typeof ev.RRULE === 'object') ? 1 : 0,
-      };
+      try {
+        events[eventId] = {
+          event_id: eventId,
+          owner_id: agent.id,
+          owner_name: agent.name,
+          name: String(ev.NAME || ''),
+          date_from: new Date(Number(ev.DATE_FROM_TS_UTC) * 1000).toISOString(),
+          date_to: ev.DATE_TO_TS_UTC ? new Date(Number(ev.DATE_TO_TS_UTC) * 1000).toISOString() : '',
+          all_day: ev.DT_SKIP_TIME === 'Y' ? 1 : 0,
+          location: String(ev.LOCATION || ''),
+          is_recurring: (ev.RRULE && typeof ev.RRULE === 'object') ? 1 : 0,
+        };
+      } catch (err) {
+        console.warn(`  [calendar] skipping malformed event ${eventId}: ${err.message}`);
+      }
     }
   }
   return { roster, events };
