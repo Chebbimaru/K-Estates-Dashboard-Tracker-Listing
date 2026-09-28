@@ -460,7 +460,13 @@
     <div id="panel-sales-dept" class="panel">
       <div class="card">
         <h2>Sales Department Calendar</h2>
-        <div class="hint">Bookings by day for active agents in the Sales Department. Use the Agent filter above to narrow to one agent.</div>
+        <div class="hint">Real Bitrix24 calendar schedule for active agents in the Sales Department.</div>
+        <div class="controls cal-controls">
+          <div>
+            <label>Agent</label>
+            <select id="sd-agent-filter"><option value="all">All active agents</option></select>
+          </div>
+        </div>
         <div class="cal-nav">
           <button class="cal-nav-btn" id="sd-cal-prev" aria-label="Previous month">&larr;</button>
           <select class="cal-select" id="sd-cal-month-select" aria-label="Select month"></select>
@@ -536,9 +542,10 @@ const ENTITY_TYPE_ID = 1032;         // Property Inventory SPA (for CRM detail l
 const NOW = new Date();
 const state = {
   period: 'all', agent: 'all', type: 'all', search: '', status: 'all',
-  calAgent: 'all', calType: 'all',
+  calAgent: 'all', calType: 'all', sdAgent: 'all',
 };
 let DATA = null; // { bookings: [...], summary: [...], events: [...], meta: {...} }
+let SALES_CALENDAR = null; // { agents: [{id,name}], events: [...normalized event bookings] }
 
 // ---------- Backend API ----------
 async function apiGet(url) {
@@ -580,6 +587,31 @@ async function loadData() {
       total_activities: bookings.length,
       generated: new Date().toISOString()
     }
+  };
+}
+
+// Loads the Sales Department's real Bitrix24 calendar schedule (roster + events)
+async function loadSalesCalendarData() {
+  const payload = await apiGet('/api/sales-calendar');
+  const events = (payload.events || []).map(ev => ({
+    kind: 'event',
+    booking_date: (ev.date_from || '').slice(0, 16),
+    date_from: ev.date_from || '',
+    date_to: ev.date_to || '',
+    all_day: !!ev.all_day,
+    location: ev.location || '',
+    listing: ev.name || '',
+    client_name: '',
+    client_phone: '',
+    address: ev.location || '',
+    pipeline: '',
+    responsible: ev.owner_name || 'Unknown',
+    sale_rent: '',
+    status: 'active',
+  }));
+  return {
+    agents: payload.agents || [],
+    events: events,
   };
 }
 
@@ -638,15 +670,14 @@ function calendarBookings() {
   });
 }
 
-// Sales Department tab: always active bookings from Sales Dept agents,
-// independent of the top Agent/Type/Status filters (which belong to the
-// Bookings/Agent tab), but still respects Period and Search.
-function salesDeptCalendarBookings() {
-  return DATA.bookings.filter(b => {
-    if (!matchesPeriodAndSearch(b)) return false;
-    if (b.status !== 'active') return false;
-    if (!b.sales_department) return false;
-    if (state.agent !== 'all' && b.responsible !== state.agent) return false;
+// Sales Department tab: real Bitrix24 calendar events for the department's
+// active roster, independent of the Bookings/Agent tab's filters, but
+// still respects Period and Search, and its own Agent dropdown.
+function salesDeptCalendarEvents() {
+  if (!SALES_CALENDAR) return [];
+  return SALES_CALENDAR.events.filter(ev => {
+    if (!matchesPeriodAndSearch(ev)) return false;
+    if (state.sdAgent !== 'all' && ev.responsible !== state.sdAgent) return false;
     return true;
   });
 }
@@ -772,7 +803,7 @@ function makeCalendarController(opts) {
     monthSel.innerHTML = MONTH_NAMES.map((m, i) => '<option value="' + i + '">' + m + '</option>').join('');
 
     const years = new Set([NOW.getFullYear()]);
-    DATA.bookings.forEach(b => {
+    opts.getBookings().forEach(b => {
       const y = parseInt((b.booking_date || '').slice(0, 4), 10);
       if (!isNaN(y)) years.add(y);
     });
@@ -872,17 +903,30 @@ const bookingCalendar = makeCalendarController({
 const salesDeptCalendar = makeCalendarController({
   gridId: 'sd-cal-grid', monthSelectId: 'sd-cal-month-select', yearSelectId: 'sd-cal-year-select',
   prevId: 'sd-cal-prev', nextId: 'sd-cal-next', todayId: 'sd-cal-today',
-  getBookings: salesDeptCalendarBookings,
+  getBookings: salesDeptCalendarEvents,
 });
 
 function openDayModal(key, dayMap) {
   const items = dayMap[key] || [];
+  const isEvents = items.length > 0 && items[0].kind === 'event';
   const d = new Date(key + 'T00:00:00');
   document.getElementById('day-title').textContent =
     d.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) +
-    ' · ' + items.length + (items.length === 1 ? ' booking' : ' bookings');
+    ' · ' + items.length + (items.length === 1 ? (isEvents ? ' event' : ' booking') : (isEvents ? ' events' : ' bookings'));
 
   document.getElementById('day-body').innerHTML = items.map(b => {
+    if (b.kind === 'event') {
+      const from = b.date_from ? new Date(b.date_from).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+      const to = b.date_to ? new Date(b.date_to).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+      const time = b.all_day ? 'All day' : [from, to].filter(Boolean).join(' – ');
+      return '<div class="log-entry">' +
+        '<div class="log-main">' +
+          '<div class="log-detail">' + cellText(b.listing) + '</div>' +
+          '<div class="log-time">' + esc(time) + (b.location ? ' &middot; ' + cellText(b.location) : '') + '</div>' +
+          '<div class="log-time">' + cellText(b.responsible) + '</div>' +
+        '</div>' +
+      '</div>';
+    }
     return '<div class="log-entry">' +
       '<div class="log-main">' +
         '<div class="log-detail">' + cellText(b.client_name) + ' &middot; ' + saleRentBadge(b.sale_rent) + ' ' + statusBadge(b.status) + '</div>' +
@@ -992,6 +1036,15 @@ function populateCalAgentOptions() {
   else state.calAgent = 'all';
 }
 
+function populateSalesDeptAgentOptions() {
+  const agents = (SALES_CALENDAR ? SALES_CALENDAR.agents : []).map(a => a.name).sort();
+  const sel = document.getElementById('sd-agent-filter');
+  const prev = state.sdAgent;
+  sel.innerHTML = '<option value="all">All active agents</option>' + agents.map(a => '<option value="' + esc(a) + '">' + esc(a) + '</option>').join('');
+  if (agents.includes(prev)) sel.value = prev;
+  else state.sdAgent = 'all';
+}
+
 function wireControls() {
   document.querySelectorAll('.tab').forEach(t => {
     t.addEventListener('click', () => {
@@ -1009,6 +1062,7 @@ function wireControls() {
 
   document.getElementById('cal-agent-filter').addEventListener('change', e => { state.calAgent = e.target.value; bookingCalendar.render(); });
   document.getElementById('cal-type-filter').addEventListener('change', e => { state.calType = e.target.value; bookingCalendar.render(); });
+  document.getElementById('sd-agent-filter').addEventListener('change', e => { state.sdAgent = e.target.value; salesDeptCalendar.render(); });
 
   bookingCalendar.wire();
   salesDeptCalendar.wire();
@@ -1034,8 +1088,10 @@ async function load() {
   setLoading(true);
   try {
     DATA = await loadData();
+    SALES_CALENDAR = await loadSalesCalendarData();
     populateAgentOptions();
     populateCalAgentOptions();
+    populateSalesDeptAgentOptions();
     bookingCalendar.populateSelects();
     salesDeptCalendar.populateSelects();
     renderAll();
