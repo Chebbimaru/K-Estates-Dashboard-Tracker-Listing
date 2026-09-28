@@ -3,6 +3,10 @@ const {
   markRemoved,
   getActiveActivityIds,
   getStatusSummary,
+  upsertCalendarEvent,
+  markCalendarEventRemoved,
+  getActiveCalendarEventIds,
+  replaceSalesDeptAgents,
 } = require('./db');
 
 const WEBHOOK = process.env.WEBHOOK || 'https://kestates.bitrix24.com/rest/25113/j10najl3oflt3b4p/';
@@ -89,6 +93,59 @@ async function fetchUsers(ids) {
   return { names, salesDeptIds };
 }
 
+async function fetchSalesDeptRoster() {
+  const res = await callApi('user.get', { filter: { UF_DEPARTMENT: SALES_DEPARTMENT_ID, ACTIVE: true } });
+  return (res.result || []).map(u => ({
+    id: String(u.ID),
+    name: [u.NAME, u.LAST_NAME].filter(Boolean).join(' ').trim() || u.LOGIN || String(u.ID),
+  }));
+}
+
+function calendarSyncWindow() {
+  const now = new Date();
+  const from = new Date(now);
+  from.setMonth(from.getMonth() - 3);
+  const to = new Date(now);
+  to.setMonth(to.getMonth() + 6);
+  const fmt = d => d.toISOString().slice(0, 10);
+  return { from: fmt(from), to: fmt(to) };
+}
+
+async function fetchCalendarEventsForUser(ownerId, from, to) {
+  const res = await callApi('calendar.event.get', { type: 'user', ownerId, from, to });
+  return (res.result || []).filter(ev => ev.DELETED !== 'Y');
+}
+
+async function buildCalendarEvents() {
+  const roster = await fetchSalesDeptRoster();
+  const { from, to } = calendarSyncWindow();
+  const events = {};
+  for (const agent of roster) {
+    let raw;
+    try {
+      raw = await fetchCalendarEventsForUser(agent.id, from, to);
+    } catch (err) {
+      console.warn(`  [calendar] skipping ${agent.name} (${agent.id}): ${err.message}`);
+      continue;
+    }
+    for (const ev of raw) {
+      const eventId = agent.id + ':' + String(ev.ID);
+      events[eventId] = {
+        event_id: eventId,
+        owner_id: agent.id,
+        owner_name: agent.name,
+        name: String(ev.NAME || ''),
+        date_from: new Date(Number(ev.DATE_FROM_TS_UTC) * 1000).toISOString(),
+        date_to: ev.DATE_TO_TS_UTC ? new Date(Number(ev.DATE_TO_TS_UTC) * 1000).toISOString() : '',
+        all_day: ev.DT_SKIP_TIME === 'Y' ? 1 : 0,
+        location: String(ev.LOCATION || ''),
+        is_recurring: (ev.RRULE && typeof ev.RRULE === 'object') ? 1 : 0,
+      };
+    }
+  }
+  return { roster, events };
+}
+
 async function buildBookings() {
   const activities = await fetchAllActivities();
 
@@ -160,10 +217,34 @@ async function sync() {
     }
   }
 
+  console.log(`[sync] Fetching Sales Department calendars...`);
+  const { roster, events } = await buildCalendarEvents();
+  replaceSalesDeptAgents(roster, now);
+
+  let calCreated = 0, calUpdated = 0, calRestored = 0, calRemoved = 0;
+  const seenEvents = new Set();
+  for (const [eventId, ev] of Object.entries(events)) {
+    seenEvents.add(eventId);
+    const result = upsertCalendarEvent(ev, now);
+    if (result.firstSeen) calCreated++;
+    else if (result.status === 'updated') calUpdated++;
+    else if (result.status === 'restored') calRestored++;
+  }
+
+  const storedEvents = getActiveCalendarEventIds();
+  for (const eventId of storedEvents) {
+    if (!seenEvents.has(eventId)) {
+      const didChange = markCalendarEventRemoved(eventId, now);
+      if (didChange.changed) calRemoved++;
+    }
+  }
+  console.log(`[sync] Calendar events -> Created: ${calCreated}, Updated: ${calUpdated}, Restored: ${calRestored}, Removed: ${calRemoved}, Roster: ${roster.length} agents`);
+
   const summary = Object.fromEntries(getStatusSummary().map(r => [r.status, r.count]));
   console.log(`[sync] Done. Created: ${created}, Updated: ${updated}, Restored: ${restored}, Removed: ${removed}`);
   console.log(`[sync] DB totals -> active: ${summary.active || 0}, removed: ${summary.removed || 0}`);
-  return { created, updated, restored, removed };
+
+  return { created, updated, restored, removed, calCreated, calUpdated, calRestored, calRemoved };
 }
 
 if (require.main === module) {
