@@ -60,6 +60,31 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
   CREATE INDEX IF NOT EXISTS idx_bookings_responsible ON bookings(responsible);
   CREATE INDEX IF NOT EXISTS idx_statuslog_activity ON status_log(activity_id);
+
+  CREATE TABLE IF NOT EXISTS calendar_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    event_id TEXT UNIQUE NOT NULL,
+    owner_id TEXT NOT NULL,
+    owner_name TEXT NOT NULL,
+    name TEXT,
+    date_from TEXT NOT NULL,
+    date_to TEXT,
+    all_day INTEGER NOT NULL DEFAULT 0,
+    location TEXT,
+    is_recurring INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'active'
+  );
+
+  CREATE TABLE IF NOT EXISTS sales_dept_agents (
+    user_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_calendar_events_status ON calendar_events(status);
+  CREATE INDEX IF NOT EXISTS idx_calendar_events_owner ON calendar_events(owner_name);
 `);
 
 // Additive migration for DBs created before sales_department existed.
@@ -143,6 +168,40 @@ const UPSERT_CREDENTIALS = db.prepare(`
   INSERT INTO credentials (username, salt, hash, updated_at) VALUES (@username, @salt, @hash, @updated_at)
   ON CONFLICT(username) DO UPDATE SET salt = excluded.salt, hash = excluded.hash, updated_at = excluded.updated_at
 `);
+
+const INSERT_CALENDAR_EVENT = db.prepare(`
+  INSERT INTO calendar_events
+    (event_id, owner_id, owner_name, name, date_from, date_to, all_day, location, is_recurring, created_at, updated_at, status)
+  VALUES
+    (@event_id, @owner_id, @owner_name, @name, @date_from, @date_to, @all_day, @location, @is_recurring, @created_at, @updated_at, @status)
+`);
+
+const GET_CALENDAR_EVENT = db.prepare(`SELECT * FROM calendar_events WHERE event_id = ?`);
+
+const UPDATE_CALENDAR_EVENT = db.prepare(`
+  UPDATE calendar_events SET
+    owner_id = @owner_id, owner_name = @owner_name, name = @name,
+    date_from = @date_from, date_to = @date_to, all_day = @all_day,
+    location = @location, is_recurring = @is_recurring,
+    updated_at = @updated_at, status = @status
+  WHERE event_id = @event_id
+`);
+
+const SET_CALENDAR_EVENT_STATUS = db.prepare(
+  `UPDATE calendar_events SET status = ?, updated_at = ? WHERE event_id = ?`
+);
+
+const ALL_ACTIVE_CALENDAR_EVENTS = db.prepare(`SELECT event_id FROM calendar_events WHERE status = 'active'`);
+
+const ALL_CALENDAR_EVENTS = db.prepare(`SELECT * FROM calendar_events WHERE status = 'active' ORDER BY date_from ASC`);
+
+const DELETE_SALES_DEPT_AGENTS = db.prepare(`DELETE FROM sales_dept_agents`);
+
+const INSERT_SALES_DEPT_AGENT = db.prepare(`
+  INSERT INTO sales_dept_agents (user_id, name, updated_at) VALUES (@user_id, @name, @updated_at)
+`);
+
+const ALL_SALES_DEPT_AGENTS = db.prepare(`SELECT * FROM sales_dept_agents ORDER BY name ASC`);
 
 function upsertBooking(b, now) {
   const existing = GET_BOOKING.get(b.activity_id);
@@ -234,6 +293,57 @@ function updateCredentials(username, salt, hash) {
   UPSERT_CREDENTIALS.run({ username, salt, hash, updated_at: new Date().toISOString() });
 }
 
+function upsertCalendarEvent(ev, now) {
+  const existing = GET_CALENDAR_EVENT.get(ev.event_id);
+  if (!existing) {
+    INSERT_CALENDAR_EVENT.run({ ...ev, created_at: now, updated_at: now, status: 'active' });
+    return { firstSeen: true, status: 'created' };
+  }
+
+  const fields = ['owner_id', 'owner_name', 'name', 'date_from', 'date_to', 'all_day', 'location', 'is_recurring'];
+  const changed = fields.filter(f => (existing[f] || '') !== (ev[f] || ''));
+  const wasRemoved = existing.status === 'removed';
+
+  if (wasRemoved) {
+    UPDATE_CALENDAR_EVENT.run({ ...ev, updated_at: now, status: 'active' });
+    return { firstSeen: false, status: 'restored' };
+  }
+
+  if (changed.length) {
+    UPDATE_CALENDAR_EVENT.run({ ...ev, updated_at: now, status: 'active' });
+    return { firstSeen: false, status: 'updated' };
+  }
+
+  return { firstSeen: false, status: 'unchanged' };
+}
+
+function markCalendarEventRemoved(event_id, now) {
+  const existing = GET_CALENDAR_EVENT.get(event_id);
+  if (!existing || existing.status === 'removed') return { changed: false };
+  SET_CALENDAR_EVENT_STATUS.run('removed', now, event_id);
+  return { changed: true };
+}
+
+function getActiveCalendarEventIds() {
+  return ALL_ACTIVE_CALENDAR_EVENTS.all().map(r => r.event_id);
+}
+
+function getCalendarEvents() {
+  return ALL_CALENDAR_EVENTS.all();
+}
+
+function replaceSalesDeptAgents(agents, now) {
+  const tx = db.transaction((rows) => {
+    DELETE_SALES_DEPT_AGENTS.run();
+    for (const a of rows) INSERT_SALES_DEPT_AGENT.run({ user_id: a.id, name: a.name, updated_at: now });
+  });
+  tx(agents);
+}
+
+function getSalesDeptAgents() {
+  return ALL_SALES_DEPT_AGENTS.all();
+}
+
 module.exports = {
   db,
   upsertBooking,
@@ -251,4 +361,10 @@ module.exports = {
   deleteExpiredSessions,
   getCredentials,
   updateCredentials,
+  upsertCalendarEvent,
+  markCalendarEventRemoved,
+  getActiveCalendarEventIds,
+  getCalendarEvents,
+  replaceSalesDeptAgents,
+  getSalesDeptAgents,
 };
