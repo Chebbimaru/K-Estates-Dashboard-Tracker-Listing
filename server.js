@@ -13,6 +13,8 @@ const {
   getSession,
   deleteSession,
   deleteExpiredSessions,
+  getCalendarEvents,
+  getSalesDeptAgents,
 } = require('./db');
 const { verifyPassword, generateSessionToken, changePassword, SESSION_DURATION_MS } = require('./auth');
 
@@ -185,6 +187,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && p === '/api/agents') {
       return send(req, res, 200, { agents: getAgentSummary() });
+    }
+
+    if (req.method === 'GET' && p === '/api/sales-calendar') {
+      return send(req, res, 200, { agents: getSalesDeptAgents(), events: getCalendarEvents() });
     }
 
     if (req.method === 'GET' && p === '/api/history') {
