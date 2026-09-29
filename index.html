@@ -17,9 +17,10 @@
     --row-fill: #FBFAF6;
     --gold: #B08D3E;
     --gold-soft: #E2D3AE;
+    --series-bookings: #2a78d6;
+    --series-events: #eda100;
     --removed-bg: #1B1B1B;
     --control-line: #C9C2B2;
-    --bar-track: #EFEAE0;
     --thead-line: #C9C2B2;
     --modal-bg: #F5F3EE;
     --shadow: 0 2px 6px rgba(20, 16, 8, .05), 0 20px 44px -24px rgba(20, 16, 8, .18);
@@ -34,8 +35,9 @@
     --row-fill: #26241F;
     --gold: #C9A950;
     --gold-soft: #6B5A2E;
+    --series-bookings: #3987e5;
+    --series-events: #c98500;
     --control-line: #4A463C;
-    --bar-track: #2B2923;
     --thead-line: #4A463C;
     --modal-bg: #161511;
     --shadow: 0 2px 8px rgba(0, 0, 0, .45), 0 24px 60px -24px rgba(0, 0, 0, .7);
@@ -51,8 +53,9 @@
       --row-fill: #26241F;
       --gold: #C9A950;
       --gold-soft: #6B5A2E;
+      --series-bookings: #3987e5;
+      --series-events: #c98500;
       --control-line: #4A463C;
-      --bar-track: #2B2923;
       --thead-line: #4A463C;
       --modal-bg: #161511;
       --shadow: 0 2px 8px rgba(0, 0, 0, .45), 0 24px 60px -24px rgba(0, 0, 0, .7);
@@ -153,16 +156,46 @@
   .card .hint { font-size: 12px; color: var(--muted); margin-bottom: 22px; font-weight: 400; }
 
   /* ---------- Chart ---------- */
-  .bar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 10px; animation: rise .5s ease both; }
-  .bar-label { width: 190px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight: 600; letter-spacing: .04em; color: var(--ink); }
-  .bar-track { flex: 1; background: var(--bar-track); height: 22px; overflow: hidden; }
-  .bar-fill {
-    height: 100%; background: linear-gradient(90deg, #000000, #3A3A3A); color: #fff; display: flex; align-items: center; justify-content: flex-end;
-    padding-right: 10px; font-size: 11px; font-weight: 600; font-variant-numeric: tabular-nums;
-    width: 0; transition: width .8s cubic-bezier(.22,.61,.36,1);
+  .bc-scroll { overflow-x: auto; }
+  .bc-svg { display: block; width: 100%; height: auto; }
+  .bc-grid { stroke: var(--hairline); stroke-width: 1; }
+  .bc-base { stroke: var(--control-line); }
+  .bc-tick, .bc-name, .bc-val { font-family: 'Montserrat', sans-serif; font-size: 11px; }
+  .bc-tick { fill: var(--muted); font-variant-numeric: tabular-nums; }
+  .bc-name { fill: var(--muted); transition: fill .2s ease; }
+  .bc-val { fill: var(--ink); font-weight: 700; }
+  .bc-hit { fill: transparent; }
+  .bc-col { outline: none; cursor: pointer; }
+  .bc-seg { transform-box: fill-box; transform-origin: 50% 100%; transition: filter .2s ease; animation: bc-grow .6s cubic-bezier(.22,.61,.36,1) both; }
+  .bc-seg-b { fill: var(--series-bookings); }
+  .bc-seg-e { fill: var(--series-events); }
+  .bc-col:hover .bc-seg, .bc-col:focus .bc-seg { filter: brightness(1.15); }
+  .bc-col:hover .bc-name, .bc-col:focus .bc-name { fill: var(--ink); }
+  .bc-col:focus-visible .bc-hit { stroke: var(--gold); stroke-width: 1; }
+  @keyframes bc-grow { from { transform: scaleY(0); } }
+  @media (prefers-reduced-motion: reduce) { .bc-seg { animation: none; } }
+  .bc-tip {
+    position: fixed; z-index: 50; pointer-events: none; opacity: 0; transition: opacity .12s ease;
+    background: var(--card); color: var(--ink); border: 1px solid var(--hairline); box-shadow: var(--shadow);
+    padding: 8px 12px; font-size: 12px; line-height: 1.4;
   }
-  .bar-row:hover .bar-fill { background: var(--gold); }
-  @keyframes rise { from { opacity: 0; transform: translateY(6px); } }
+  .bc-tip.show { opacity: 1; }
+  .bc-tip strong { display: block; font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+  .bc-tip span { color: var(--muted); }
+  .bc-tip-row { display: flex; justify-content: space-between; gap: 18px; }
+  .bc-tip-row b { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .bc-tip-name { display: block; margin-top: 6px; }
+  .bc-key-line { display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 8px; vertical-align: middle; }
+  .bc-legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0 0 12px; font-size: 12px; color: var(--muted); }
+  .bc-legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .bc-key { display: inline-block; width: 12px; height: 12px; border-radius: 2px; }
+  .bc-key-b { background: var(--series-bookings); }
+  .bc-key-e { background: var(--series-events); }
+  .chart-details { margin-top: 14px; }
+  .chart-details summary { cursor: pointer; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
+  .chart-details table { margin-top: 12px; }
+  .chart-details td summary { cursor: pointer; color: var(--ink); font-size: 13px; font-weight: 400; letter-spacing: normal; text-transform: none; }
+  .ev-list { margin: 8px 0 4px 18px; font-size: 12px; color: var(--muted); line-height: 1.7; }
 
   /* ---------- Table ---------- */
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
@@ -237,6 +270,9 @@
   .log-main { flex: 1; min-width: 0; }
   .log-detail { font-size: 13px; color: var(--ink); font-weight: 500; word-break: break-word; }
   .log-time { font-size: 10px; color: var(--muted); margin-top: 4px; letter-spacing: .03em; font-variant-numeric: tabular-nums; }
+  .am-section h3 { font-size: 10px; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; color: var(--muted); margin: 22px 0 2px; padding-bottom: 8px; border-bottom: 1px solid var(--hairline); }
+  .am-section:first-child h3 { margin-top: 0; }
+  .am-empty { font-size: 12px; color: var(--muted); padding: 12px 2px; }
 
   /* ---------- Calendar ---------- */
   .cal-nav { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 16px; }
@@ -297,7 +333,6 @@
     .topbar-inner { padding: 20px; }
     .wrap { padding: 24px 16px 50px; }
     .brand h1 { font-size: 16px; }
-    .bar-label { width: 110px; }
     .card { padding: 20px; }
     .controls { gap: 18px; }
     .search-box { max-width: none; }
@@ -363,6 +398,8 @@
   </div>
 </div>
 
+<div id="bc-tip" class="bc-tip" role="status"></div>
+
 <div class="wrap">
 
   <div id="error" class="error-banner" style="display:none"></div>
@@ -422,12 +459,14 @@
       </div>
       <div class="card">
         <h2>Bookings by Agent</h2>
-        <div class="hint">Viewing bookings attributed to each responsible agent for the selected period.</div>
+        <div class="hint">Viewing bookings plus the events each active Sales Department agent created in their own calendar, for the selected filters. Hover a column for the split; click one to open that agent's calendar.</div>
+        <div class="bc-legend"><span><i class="bc-key bc-key-b"></i>Bookings</span><span><i class="bc-key bc-key-e"></i>Events created</span></div>
         <div id="bookings-chart"></div>
         <div id="chart-empty" class="empty" style="display:none">No bookings match the selected filters.</div>
+        <details class="chart-details"><summary>View as table</summary><div id="bookings-table"></div></details>
       </div>
       <div class="card">
-        <h2>Booking Calendar</h2>
+        <h2>Booking Calendar Lead</h2>
         <div class="hint">Bookings by day for the selected filters. Click a day to see its bookings.</div>
         <div class="controls cal-controls">
           <div>
@@ -536,6 +575,7 @@
   <div class="gen" id="generated"></div>
 </div>
 
+<script src="/login.js"></script>
 <script>
 const ENTITY_TYPE_ID = 1032;         // Property Inventory SPA (for CRM detail links)
 
@@ -551,8 +591,8 @@ let SALES_CALENDAR = null; // { agents: [{id,name}], events: [...normalized even
 async function apiGet(url) {
   const res = await fetch(url);
   if (res.status === 401) {
-    window.location.href = '/login';
-    return new Promise(() => {}); // navigation is underway; don't let callers handle a real response
+    window.showLogin();
+    return new Promise(() => {}); // login overlay is up (a sign-in reloads the page); don't let callers handle a real response
   }
   if (!res.ok) throw new Error('API ' + url + ' failed (HTTP ' + res.status + ')');
   return res.json();
@@ -608,6 +648,8 @@ async function loadSalesCalendarData() {
     date_from: ev.date_from || '',
     date_to: ev.date_to || '',
     all_day: !!ev.all_day,
+    is_recurring: !!ev.is_recurring,
+    created_by_owner: !!ev.created_by_owner,
     location: ev.location || '',
     listing: ev.name || '',
     client_name: '',
@@ -648,7 +690,7 @@ function inPeriod(dateStr, period) {
   }
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - parseInt(period, 10));
-  return d >= cutoff;
+  return d >= cutoff && d <= new Date();
 }
 
 function matchesPeriodAndSearch(b) {
@@ -695,25 +737,189 @@ function renderStats(bookings) {
   document.getElementById('stat-total').textContent = bookings.length;
   document.getElementById('stat-sale').textContent = bookings.filter(b => b.sale_rent === 'Sale').length;
   document.getElementById('stat-rent').textContent = bookings.filter(b => b.sale_rent === 'Rent').length;
-  document.getElementById('stat-agents').textContent = new Set(bookings.map(b => b.responsible)).size;
+  // Headcount of the active Sales Department roster (not filtered).
+  document.getElementById('stat-agents').textContent = SALES_CALENDAR ? SALES_CALENDAR.agents.length : 0;
 }
 
+// ---------- Bookings by Agent: column chart (inline SVG) ----------
+const BC = { slot: 40, barW: 20, left: 60, right: 12, top: 26, plotH: 220, labelBand: 100, radius: 4 };
+
+// Integer y-axis ticks, at most ~5 intervals, top rounded up to a clean multiple.
+function niceScale(max) {
+  const steps = [1, 2, 5, 10, 20, 25, 50, 100, 200, 250, 500, 1000];
+  let step = steps[steps.length - 1];
+  for (const s of steps) { if (Math.ceil(max / s) <= 5) { step = s; break; } }
+  return { step, top: Math.max(step, Math.ceil(max / step) * step) };
+}
+
+// Column with a rounded top and a square base, growing from the baseline.
+function columnPath(x, y, w, h, r) {
+  r = Math.min(r, h, w / 2);
+  return 'M' + x + ',' + (y + h) + 'V' + (y + r) + 'Q' + x + ',' + y + ' ' + (x + r) + ',' + y +
+    'H' + (x + w - r) + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) + 'V' + (y + h) + 'Z';
+}
+
+// entries: [{ name, bookings, events, n }] already sorted (n = bookings + events).
+// Stacked columns: bookings at the bottom, events created on top. Returns an SVG string (names are escaped).
+function agentColumnsSvg(entries) {
+  const max = entries.reduce((m, e) => Math.max(m, e.n), 0);
+  const { step, top } = niceScale(max);
+  const W = BC.left + entries.length * BC.slot + BC.right;
+  const H = BC.top + BC.plotH + BC.labelBand;
+  const base = BC.top + BC.plotH;
+  const yOf = v => base - (v / top) * BC.plotH;
+
+  let g = '';
+  for (let v = 0; v <= top; v += step) {
+    const y = yOf(v);
+    g += '<line class="bc-grid' + (v === 0 ? ' bc-base' : '') + '" x1="' + BC.left + '" x2="' + (W - BC.right) + '" y1="' + y + '" y2="' + y + '"/>' +
+      '<text class="bc-tick" x="' + (BC.left - 8) + '" y="' + (y + 4) + '" text-anchor="end">' + v + '</text>';
+  }
+
+  const maxIdx = max > 0 ? entries.findIndex(e => e.n === max) : -1;
+  entries.forEach((e, i) => {
+    const slotX = BC.left + i * BC.slot;
+    const cx = slotX + BC.slot / 2;
+    const x = cx - BC.barW / 2;
+    const label = e.name.length > 14 ? e.name.slice(0, 13) + '\u2026' : e.name;
+    const summary = e.n + ' total (' + e.bookings + (e.bookings === 1 ? ' booking, ' : ' bookings, ') +
+      e.events + (e.events === 1 ? ' event created)' : ' events created)');
+    g += '<g class="bc-col" tabindex="0" role="button" data-agent="' + esc(e.name) + '" data-b="' + e.bookings + '" data-e="' + e.events +
+        '" aria-label="' + esc(e.name) + ': ' + summary + ' \u2014 view details">' +
+      '<rect class="bc-hit" x="' + slotX + '" y="' + BC.top + '" width="' + BC.slot + '" height="' + (BC.plotH + BC.labelBand) + '"/>';
+
+    const yB = yOf(e.bookings);          // top edge of the bookings segment
+    const yTop = yOf(e.n);               // top edge of the whole column
+    if (e.bookings > 0) {
+      g += '<path class="bc-seg bc-seg-b" d="' + columnPath(x, yB, BC.barW, base - yB, e.events > 0 ? 0 : BC.radius) + '"/>';
+    }
+    if (e.events > 0) {
+      const gap = e.bookings > 0 && (yB - yTop) >= 5 ? 2 : 0;   // 2px surface gap between stacked segments
+      g += '<path class="bc-seg bc-seg-e" d="' + columnPath(x, yTop, BC.barW, yB - yTop - gap, BC.radius) + '"/>';
+    }
+    if (i === maxIdx) {
+      g += '<text class="bc-val" x="' + cx + '" y="' + (yTop - 6) + '" text-anchor="middle">' + e.n + '</text>';
+    }
+    g += '<text class="bc-name" transform="translate(' + (cx + 4) + ',' + (base + 12) + ') rotate(-45)" text-anchor="end">' + esc(label) + '</text>' +
+      '</g>';
+  });
+
+  return '<svg class="bc-svg" viewBox="0 0 ' + W + ' ' + H + '" style="min-width:' + W + 'px" role="group" aria-label="Bookings and events created by agent">' + g + '</svg>';
+}
+
+function renderBookingsTable(entries) {
+  const table = document.createElement('table');
+  const head = table.createTHead().insertRow();
+  ['Agent', 'Bookings', 'Events created', 'Total'].forEach(t => { const th = document.createElement('th'); th.textContent = t; head.appendChild(th); });
+  const body = table.createTBody();
+  entries.forEach(e => {
+    const r = body.insertRow();
+    const nameCell = r.insertCell();
+    if (e.eventList.length) {
+      const details = document.createElement('details');
+      const summary = document.createElement('summary');
+      summary.textContent = e.name;
+      const list = document.createElement('ul');
+      list.className = 'ev-list';
+      e.eventList.slice().sort((a, b) => a.date_from.localeCompare(b.date_from)).forEach(ev => {
+        const li = document.createElement('li');
+        const when = ev.all_day ? fmtDate(ev.date_from).split(' \u00b7 ')[0] : fmtDate(ev.date_from);
+        li.textContent = (ev.listing || '(untitled)') + ' \u2014 ' + when +
+          (ev.is_recurring ? ' (recurring)' : '') + (ev.location ? ' \u00b7 ' + ev.location : '');
+        list.appendChild(li);
+      });
+      details.append(summary, list);
+      nameCell.appendChild(details);
+    } else {
+      nameCell.textContent = e.name;
+    }
+    r.insertCell().textContent = e.bookings;
+    r.insertCell().textContent = e.events;
+    r.insertCell().textContent = e.n;
+  });
+  document.getElementById('bookings-table').replaceChildren(table);
+}
+
+// Columns = every active Sales Department agent from the CRM roster (0 included).
+// Bookings: CRM viewing bookings under the current filters, matched by agent name.
+// Events created: calendar events the agent hosts in their own calendar, respecting Period, Search
+// and the Agent filter (Type/Status are booking-only concepts, so they don't apply to events).
+// Agent name -> chart entry (with bookingList / eventList) from the latest render; read by the bar-click modal.
+let AGENT_DETAIL = {};
+
 function renderChart(bookings) {
-  const counts = {};
-  bookings.forEach(b => { counts[b.responsible] = (counts[b.responsible] || 0) + 1; });
-  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]);
   const el = document.getElementById('bookings-chart');
   const empty = document.getElementById('chart-empty');
-  if (!entries.length) { el.innerHTML = ''; empty.style.display = 'block'; return; }
-  empty.style.display = 'none';
-  const max = entries[0][1];
-  el.innerHTML = entries.map(([agent, n], idx) => {
-    const pct = Math.max(8, Math.round((n / max) * 100));
-    return '<div class="bar-row" style="animation-delay:' + (idx * 60) + 'ms">' +
-      '<div class="bar-label" title="' + esc(agent) + '">' + esc(agent) + '</div>' +
-      '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%; transition-delay:' + (idx * 90) + 'ms">' + n + '</div></div>' +
-    '</div>';
-  }).join('');
+  const roster = SALES_CALENDAR ? SALES_CALENDAR.agents : [];
+  AGENT_DETAIL = {};
+  if (!roster.length) {
+    el.replaceChildren();
+    document.getElementById('bookings-table').replaceChildren();
+    empty.textContent = 'No Sales Department agents loaded yet \u2014 run "npm run sync" to pull the roster.';
+    empty.style.display = 'block';
+    return;
+  }
+  const bookingLists = {};
+  bookings.forEach(b => { (bookingLists[b.responsible] = bookingLists[b.responsible] || []).push(b); });
+  const createdEvents = {};
+  (SALES_CALENDAR ? SALES_CALENDAR.events : []).forEach(ev => {
+    if (!ev.created_by_owner || !matchesPeriodAndSearch(ev)) return;
+    if (state.agent !== 'all' && ev.responsible !== state.agent) return;
+    (createdEvents[ev.responsible] = createdEvents[ev.responsible] || []).push(ev);
+  });
+  const entries = roster.map(a => {
+    const eventList = createdEvents[a.name] || [];
+    const bookingList = bookingLists[a.name] || [];
+    const b = bookingList.length;
+    return { name: a.name, bookings: b, events: eventList.length, n: b + eventList.length, eventList, bookingList };
+  }).sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
+  entries.forEach(e => { AGENT_DETAIL[e.name] = e; });
+  el.innerHTML = '<div class="bc-scroll">' + agentColumnsSvg(entries) + '</div>';
+  renderBookingsTable(entries);
+  empty.textContent = 'No bookings or created events match the selected filters.';
+  empty.style.display = entries.some(e => e.n > 0) ? 'none' : 'block';
+}
+
+function wireChartTooltip() {
+  const host = document.getElementById('bookings-chart');
+  const tip = document.getElementById('bc-tip');
+  function show(col, x, y) {
+    const b = Number(col.dataset.b);
+    const ev = Number(col.dataset.e);
+    const total = document.createElement('strong');
+    total.textContent = (b + ev) + ' total';
+    const rows = [['bc-key-b', 'Bookings', b], ['bc-key-e', 'Events created', ev]].map(([cls, label, v]) => {
+      const row = document.createElement('div');
+      row.className = 'bc-tip-row';
+      const left = document.createElement('span');
+      const key = document.createElement('i');
+      key.className = 'bc-key-line ' + cls;
+      left.append(key, label);
+      const val = document.createElement('b');
+      val.textContent = v;
+      row.append(left, val);
+      return row;
+    });
+    const name = document.createElement('span');
+    name.className = 'bc-tip-name';
+    name.textContent = col.dataset.agent;
+    tip.replaceChildren(total, ...rows, name);
+    tip.classList.add('show');
+    const r = tip.getBoundingClientRect();
+    tip.style.left = Math.min(Math.max(8, x + 14), window.innerWidth - r.width - 8) + 'px';
+    tip.style.top = Math.min(Math.max(8, y - r.height - 12), window.innerHeight - r.height - 8) + 'px';
+  }
+  const hide = () => tip.classList.remove('show');
+  host.addEventListener('pointermove', e => {
+    const col = e.target.closest('.bc-col');
+    if (col) show(col, e.clientX, e.clientY); else hide();
+  });
+  host.addEventListener('pointerleave', hide);
+  host.addEventListener('focusin', e => {
+    const col = e.target.closest('.bc-col');
+    if (col) { const b = col.getBoundingClientRect(); show(col, b.left + b.width / 2, b.top + 40); }
+  });
+  host.addEventListener('focusout', hide);
 }
 
 function esc(s) {
@@ -795,6 +1001,23 @@ function daysInMonth(year, month) {
 
 function dateKey(year, month, day) {
   return year + '-' + String(month + 1).padStart(2, '0') + '-' + String(day).padStart(2, '0');
+}
+
+// Day (from a list of 'YYYY-MM-DD' keys) closest to todayKey: today itself if present,
+// otherwise the smallest distance in either direction, ties going to the upcoming day.
+function nearestDayKey(keys, todayKey) {
+  if (!keys.length) return null;
+  if (keys.includes(todayKey)) return todayKey;
+  const dayNumber = k => Date.UTC(Number(k.slice(0, 4)), Number(k.slice(5, 7)) - 1, Number(k.slice(8, 10))) / 86400000;
+  const today = dayNumber(todayKey);
+  let best = null;
+  let bestDistance = Infinity;
+  keys.forEach(k => {
+    const diff = dayNumber(k) - today;
+    const distance = Math.abs(diff);
+    if (distance < bestDistance || (distance === bestDistance && diff > 0)) { best = k; bestDistance = distance; }
+  });
+  return best;
 }
 
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -900,7 +1123,20 @@ function makeCalendarController(opts) {
     document.getElementById(opts.yearSelectId).addEventListener('change', e => { cal.year = Number(e.target.value); render(); });
   }
 
-  return { render, shift, goToday, wire, populateSelects };
+  // Closest day (to today) that has something in the currently rendered data, or null.
+  function nearestDay() {
+    return nearestDayKey(Object.keys(cal.dayMap), dateKey(NOW.getFullYear(), NOW.getMonth(), NOW.getDate()));
+  }
+
+  // Jump the grid to the month containing key and open that day's popup.
+  function showDay(key) {
+    cal.year = Number(key.slice(0, 4));
+    cal.month = Number(key.slice(5, 7)) - 1;
+    render();
+    openDayModal(key, cal.dayMap);
+  }
+
+  return { render, shift, goToday, wire, populateSelects, nearestDay, showDay };
 }
 
 const bookingCalendar = makeCalendarController({
@@ -1054,14 +1290,73 @@ function populateSalesDeptAgentOptions() {
   else state.sdAgent = 'all';
 }
 
+function activateTab(panelId) {
+  document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.panel === panelId));
+  document.querySelectorAll('.panel').forEach(x => x.classList.toggle('active', x.id === panelId));
+}
+
+// Bar click: list everything behind one agent's column (their bookings and the events they created),
+// exactly as counted by the chart under the current filters.
+function openAgentModal(name) {
+  const d = AGENT_DETAIL[name];
+  if (!d) return;
+  document.getElementById('bc-tip').classList.remove('show');
+  const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
+  document.getElementById('agent-title').textContent = name;
+  document.getElementById('agent-summary').textContent = plural(d.bookings, 'booking') + ' · ' + plural(d.events, 'event') + ' created';
+
+  const time = x => x ? new Date(x).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+  const bookingRow = b =>
+    '<div class="log-entry"><div class="log-main">' +
+      '<div class="log-detail">' + cellText(b.client_name) + ' &middot; ' + saleRentBadge(b.sale_rent) + ' ' + statusBadge(b.status) + '</div>' +
+      '<div class="log-time">' + esc(fmtDate(b.booking_date)) + ' &middot; ' + cellText(b.address) + '</div>' +
+      '<div class="log-time">' + crmLink(b) + '</div>' +
+    '</div></div>';
+  const eventRow = ev => {
+    const when = fmtDate(ev.date_from).split(' · ')[0] + ' · ' +
+      (ev.all_day ? 'All day' : [time(ev.date_from), time(ev.date_to)].filter(Boolean).join(' – '));
+    return '<div class="log-entry"><div class="log-main">' +
+      '<div class="log-detail">' + cellText(ev.listing) + '</div>' +
+      '<div class="log-time">' + esc(when) + (ev.is_recurring ? ' &middot; recurring' : '') +
+        (ev.location ? ' &middot; ' + cellText(ev.location) : '') + '</div>' +
+    '</div></div>';
+  };
+  const section = (title, rows, row) =>
+    '<div class="am-section"><h3>' + title + ' (' + rows.length + ')</h3>' +
+    (rows.length ? rows.map(row).join('') : '<div class="am-empty">None</div>') + '</div>';
+  const byDate = key => (a, b) => (a[key] || '').localeCompare(b[key] || '');
+
+  document.getElementById('agent-body').innerHTML =
+    section('Bookings', d.bookingList.slice().sort(byDate('booking_date')), bookingRow) +
+    section('Events created', d.eventList.slice().sort(byDate('date_from')), eventRow);
+
+  document.getElementById('agent-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeAgentModal() {
+  document.getElementById('agent-modal').classList.remove('open');
+  document.body.style.overflow = '';
+}
+
+function wireChartClicks() {
+  const host = document.getElementById('bookings-chart');
+  host.addEventListener('click', e => {
+    const col = e.target.closest('.bc-col');
+    if (col) openAgentModal(col.dataset.agent);
+  });
+  host.addEventListener('keydown', e => {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    const col = e.target.closest('.bc-col');
+    if (!col) return;
+    e.preventDefault();
+    openAgentModal(col.dataset.agent);
+  });
+}
+
 function wireControls() {
   document.querySelectorAll('.tab').forEach(t => {
-    t.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
-      document.querySelectorAll('.panel').forEach(x => x.classList.remove('active'));
-      t.classList.add('active');
-      document.getElementById(t.dataset.panel).classList.add('active');
-    });
+    t.addEventListener('click', () => activateTab(t.dataset.panel));
   });
   document.getElementById('period').addEventListener('change', e => { state.period = e.target.value; renderAll(); });
   document.getElementById('agent-filter').addEventListener('change', e => { state.agent = e.target.value; renderAll(); });
@@ -1075,6 +1370,8 @@ function wireControls() {
 
   bookingCalendar.wire();
   salesDeptCalendar.wire();
+  wireChartTooltip();
+  wireChartClicks();
 }
 
 function showError(msg) {
@@ -1163,7 +1460,7 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
   try {
     await fetch('/api/logout', { method: 'POST' });
   } finally {
-    window.location.href = '/login';
+    window.location.reload();
   }
 });
 
@@ -1251,6 +1548,22 @@ load();
     </div>
     <div class="modal-body">
       <div id="day-body"></div>
+    </div>
+  </div>
+</div>
+
+<div id="agent-modal" class="modal-overlay" onclick="if(event.target===this)closeAgentModal()">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title-wrap">
+        <div class="eyebrow">Agent</div>
+        <h2 id="agent-title"></h2>
+        <div class="log-time" id="agent-summary"></div>
+      </div>
+      <button class="modal-close" onclick="closeAgentModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div id="agent-body"></div>
     </div>
   </div>
 </div>
