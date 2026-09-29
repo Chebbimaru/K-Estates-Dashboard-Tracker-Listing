@@ -24,7 +24,7 @@ const ADMIN_USERNAME = 'admin';
 
 const PORT = process.env.PORT || 3055;
 const DASHBOARD = path.join(__dirname, 'index.html');
-const LOGIN_PAGE = path.join(__dirname, 'login.html');
+const LOGIN_SCRIPT = path.join(__dirname, 'login.js');
 const COMPRESS_THRESHOLD = 1024;
 
 let dashboardCache = null; // { mtimeMs, content }
@@ -36,13 +36,13 @@ function getDashboardHtml() {
   return dashboardCache.content;
 }
 
-let loginCache = null; // { mtimeMs, content }
-function getLoginHtml() {
-  const stat = fs.statSync(LOGIN_PAGE);
-  if (!loginCache || loginCache.mtimeMs !== stat.mtimeMs) {
-    loginCache = { mtimeMs: stat.mtimeMs, content: fs.readFileSync(LOGIN_PAGE, 'utf-8') };
+let loginScriptCache = null; // { mtimeMs, content }
+function getLoginScript() {
+  const stat = fs.statSync(LOGIN_SCRIPT);
+  if (!loginScriptCache || loginScriptCache.mtimeMs !== stat.mtimeMs) {
+    loginScriptCache = { mtimeMs: stat.mtimeMs, content: fs.readFileSync(LOGIN_SCRIPT, 'utf-8') };
   }
-  return loginCache.content;
+  return loginScriptCache.content;
 }
 
 function send(req, res, code, data, extraHeaders) {
@@ -122,7 +122,12 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (req.method === 'GET' && p === '/login') {
-      return send(req, res, 200, getLoginHtml());
+      res.writeHead(302, { Location: '/' });
+      return res.end();
+    }
+
+    if (req.method === 'GET' && p === '/login.js') {
+      return send(req, res, 200, getLoginScript(), { 'Content-Type': 'application/javascript; charset=utf-8' });
     }
 
     if (req.method === 'POST' && p === '/api/login') {
@@ -168,8 +173,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && p === '/') {
-      const session = getSessionFromRequest(req);
-      return send(req, res, 200, session ? getDashboardHtml() : getLoginHtml());
+      return send(req, res, 200, getDashboardHtml());
     }
 
     if (req.method === 'GET' && p === '/api/bookings') {

@@ -72,6 +72,7 @@ db.exec(`
     all_day INTEGER NOT NULL DEFAULT 0,
     location TEXT,
     is_recurring INTEGER NOT NULL DEFAULT 0,
+    created_by_owner INTEGER NOT NULL DEFAULT 0,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active'
@@ -92,6 +93,14 @@ const hasSalesDeptColumn = db.prepare(`PRAGMA table_info(bookings)`).all()
   .some(col => col.name === 'sales_department');
 if (!hasSalesDeptColumn) {
   db.exec(`ALTER TABLE bookings ADD COLUMN sales_department INTEGER NOT NULL DEFAULT 0`);
+}
+
+// Additive migration for DBs created before calendar_events.created_by_owner existed
+// (1 = the calendar owner is the event's host/creator; filled in by the next sync).
+const hasCreatedByOwnerColumn = db.prepare(`PRAGMA table_info(calendar_events)`).all()
+  .some(col => col.name === 'created_by_owner');
+if (!hasCreatedByOwnerColumn) {
+  db.exec(`ALTER TABLE calendar_events ADD COLUMN created_by_owner INTEGER NOT NULL DEFAULT 0`);
 }
 
 // Seed the admin credential row from the hardcoded defaults on first run,
@@ -171,9 +180,9 @@ const UPSERT_CREDENTIALS = db.prepare(`
 
 const INSERT_CALENDAR_EVENT = db.prepare(`
   INSERT INTO calendar_events
-    (event_id, owner_id, owner_name, name, date_from, date_to, all_day, location, is_recurring, created_at, updated_at, status)
+    (event_id, owner_id, owner_name, name, date_from, date_to, all_day, location, is_recurring, created_by_owner, created_at, updated_at, status)
   VALUES
-    (@event_id, @owner_id, @owner_name, @name, @date_from, @date_to, @all_day, @location, @is_recurring, @created_at, @updated_at, @status)
+    (@event_id, @owner_id, @owner_name, @name, @date_from, @date_to, @all_day, @location, @is_recurring, @created_by_owner, @created_at, @updated_at, @status)
 `);
 
 const GET_CALENDAR_EVENT = db.prepare(`SELECT * FROM calendar_events WHERE event_id = ?`);
@@ -182,7 +191,7 @@ const UPDATE_CALENDAR_EVENT = db.prepare(`
   UPDATE calendar_events SET
     owner_id = @owner_id, owner_name = @owner_name, name = @name,
     date_from = @date_from, date_to = @date_to, all_day = @all_day,
-    location = @location, is_recurring = @is_recurring,
+    location = @location, is_recurring = @is_recurring, created_by_owner = @created_by_owner,
     updated_at = @updated_at, status = @status
   WHERE event_id = @event_id
 `);
@@ -300,7 +309,7 @@ function upsertCalendarEvent(ev, now) {
     return { firstSeen: true, status: 'created' };
   }
 
-  const fields = ['owner_id', 'owner_name', 'name', 'date_from', 'date_to', 'all_day', 'location', 'is_recurring'];
+  const fields = ['owner_id', 'owner_name', 'name', 'date_from', 'date_to', 'all_day', 'location', 'is_recurring', 'created_by_owner'];
   const changed = fields.filter(f => (existing[f] || '') !== (ev[f] || ''));
   const wasRemoved = existing.status === 'removed';
 

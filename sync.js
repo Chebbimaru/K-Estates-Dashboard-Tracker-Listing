@@ -124,6 +124,15 @@ async function fetchCalendarEventsForUser(ownerId, from, to) {
 // Normalize a Bitrix calendar event to a DB row. Throws on malformed timestamps.
 // For recurring events DATE_TO_TS_UTC is the end of the whole series, so the end of this
 // occurrence is DATE_FROM_TS_UTC + DT_LENGTH (seconds).
+// Bitrix reports the calendar owner as CREATED_BY even on invitation copies, so the host is the
+// reliable creator signal: the owner hosts it (MEETING_HOST), or, without a host field, status 'H'.
+function isCreatedByOwner(agent, ev) {
+  if (ev.MEETING_HOST !== undefined && ev.MEETING_HOST !== null && ev.MEETING_HOST !== '') {
+    return String(ev.MEETING_HOST) === String(agent.id);
+  }
+  return ev.MEETING_STATUS === 'H';
+}
+
 function toCalendarEventRow(agent, ev) {
   const eventId = agent.id + ':' + String(ev.ID);
   const fromTs = Number(ev.DATE_FROM_TS_UTC);
@@ -145,6 +154,7 @@ function toCalendarEventRow(agent, ev) {
     all_day: ev.DT_SKIP_TIME === 'Y' ? 1 : 0,
     location: String(ev.LOCATION || ''),
     is_recurring: isRecurring ? 1 : 0,
+    created_by_owner: isCreatedByOwner(agent, ev) ? 1 : 0,
   };
 }
 
@@ -300,4 +310,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { sync, reconcileRemovedCalendarEvents, toCalendarEventRow, isScheduleEvent, applyCalendarUpdate };
+module.exports = { sync, reconcileRemovedCalendarEvents, toCalendarEventRow, isScheduleEvent, isCreatedByOwner, applyCalendarUpdate };
