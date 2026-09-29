@@ -111,9 +111,41 @@ function calendarSyncWindow() {
   return { from: fmt(from), to: fmt(to) };
 }
 
+// Deleted and declined (MEETING_STATUS 'N') events are not part of the agent's schedule.
+function isScheduleEvent(ev) {
+  return ev.DELETED !== 'Y' && ev.MEETING_STATUS !== 'N';
+}
+
 async function fetchCalendarEventsForUser(ownerId, from, to) {
   const res = await callApi('calendar.event.get', { type: 'user', ownerId, from, to });
-  return (res.result || []).filter(ev => ev.DELETED !== 'Y');
+  return (res.result || []).filter(isScheduleEvent);
+}
+
+// Normalize a Bitrix calendar event to a DB row. Throws on malformed timestamps.
+// For recurring events DATE_TO_TS_UTC is the end of the whole series, so the end of this
+// occurrence is DATE_FROM_TS_UTC + DT_LENGTH (seconds).
+function toCalendarEventRow(agent, ev) {
+  const eventId = agent.id + ':' + String(ev.ID);
+  const fromTs = Number(ev.DATE_FROM_TS_UTC);
+  const isRecurring = !!(ev.RRULE && typeof ev.RRULE === 'object');
+  const length = ev.DT_LENGTH === undefined || ev.DT_LENGTH === null || ev.DT_LENGTH === '' ? NaN : Number(ev.DT_LENGTH);
+  let date_to = '';
+  if (Number.isFinite(length)) {
+    date_to = new Date((fromTs + length) * 1000).toISOString();
+  } else if (!isRecurring && ev.DATE_TO_TS_UTC) {
+    date_to = new Date(Number(ev.DATE_TO_TS_UTC) * 1000).toISOString();
+  }
+  return {
+    event_id: eventId,
+    owner_id: agent.id,
+    owner_name: agent.name,
+    name: String(ev.NAME || ''),
+    date_from: new Date(fromTs * 1000).toISOString(),
+    date_to,
+    all_day: ev.DT_SKIP_TIME === 'Y' ? 1 : 0,
+    location: String(ev.LOCATION || ''),
+    is_recurring: isRecurring ? 1 : 0,
+  };
 }
 
 async function buildCalendarEvents() {
@@ -133,17 +165,7 @@ async function buildCalendarEvents() {
     for (const ev of raw) {
       const eventId = agent.id + ':' + String(ev.ID);
       try {
-        events[eventId] = {
-          event_id: eventId,
-          owner_id: agent.id,
-          owner_name: agent.name,
-          name: String(ev.NAME || ''),
-          date_from: new Date(Number(ev.DATE_FROM_TS_UTC) * 1000).toISOString(),
-          date_to: ev.DATE_TO_TS_UTC ? new Date(Number(ev.DATE_TO_TS_UTC) * 1000).toISOString() : '',
-          all_day: ev.DT_SKIP_TIME === 'Y' ? 1 : 0,
-          location: String(ev.LOCATION || ''),
-          is_recurring: (ev.RRULE && typeof ev.RRULE === 'object') ? 1 : 0,
-        };
+        events[eventId] = toCalendarEventRow(agent, ev);
       } catch (err) {
         console.warn(`  [calendar] skipping malformed event ${eventId}: ${err.message}`);
         incompleteOwners.add(agent.id);
@@ -151,6 +173,30 @@ async function buildCalendarEvents() {
     }
   }
   return { roster, events, incompleteOwners };
+}
+
+// Persist roster + events and reconcile removals. An empty roster is treated as a Bitrix
+// hiccup: the calendar update is skipped entirely so nothing stored gets wiped.
+function applyCalendarUpdate(roster, events, incompleteOwners, now) {
+  let calCreated = 0, calUpdated = 0, calRestored = 0, calRemoved = 0;
+  if (roster.length === 0) {
+    console.warn(`[sync] Sales Department roster came back empty — skipping calendar update`);
+    return { calCreated, calUpdated, calRestored, calRemoved };
+  }
+  replaceSalesDeptAgents(roster, now);
+  const seenEvents = new Set();
+  for (const [eventId, ev] of Object.entries(events)) {
+    seenEvents.add(eventId);
+    const result = upsertCalendarEvent(ev, now);
+    if (result.firstSeen) calCreated++;
+    else if (result.status === 'updated') calUpdated++;
+    else if (result.status === 'restored') calRestored++;
+  }
+  calRemoved = reconcileRemovedCalendarEvents(seenEvents, incompleteOwners, now);
+  if (incompleteOwners.size) {
+    console.log(`[sync] Calendar removals skipped for ${incompleteOwners.size} agent(s) with incomplete data`);
+  }
+  return { calCreated, calUpdated, calRestored, calRemoved };
 }
 
 // Mark stored-but-unseen events removed, except for owners whose data was incomplete this run.
@@ -237,22 +283,7 @@ async function sync() {
 
   console.log(`[sync] Fetching Sales Department calendars...`);
   const { roster, events, incompleteOwners } = await buildCalendarEvents();
-  replaceSalesDeptAgents(roster, now);
-
-  let calCreated = 0, calUpdated = 0, calRestored = 0, calRemoved = 0;
-  const seenEvents = new Set();
-  for (const [eventId, ev] of Object.entries(events)) {
-    seenEvents.add(eventId);
-    const result = upsertCalendarEvent(ev, now);
-    if (result.firstSeen) calCreated++;
-    else if (result.status === 'updated') calUpdated++;
-    else if (result.status === 'restored') calRestored++;
-  }
-
-  calRemoved = reconcileRemovedCalendarEvents(seenEvents, incompleteOwners, now);
-  if (incompleteOwners.size) {
-    console.log(`[sync] Calendar removals skipped for ${incompleteOwners.size} agent(s) with incomplete data`);
-  }
+  const { calCreated, calUpdated, calRestored, calRemoved } = applyCalendarUpdate(roster, events, incompleteOwners, now);
   console.log(`[sync] Calendar events -> Created: ${calCreated}, Updated: ${calUpdated}, Restored: ${calRestored}, Removed: ${calRemoved}, Roster: ${roster.length} agents`);
 
   const summary = Object.fromEntries(getStatusSummary().map(r => [r.status, r.count]));
@@ -269,4 +300,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { sync, reconcileRemovedCalendarEvents };
+module.exports = { sync, reconcileRemovedCalendarEvents, toCalendarEventRow, isScheduleEvent, applyCalendarUpdate };
