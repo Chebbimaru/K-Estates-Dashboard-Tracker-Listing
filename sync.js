@@ -3,9 +3,13 @@ const {
   markRemoved,
   getActiveActivityIds,
   getStatusSummary,
+  upsertCalendarEvent,
+  markCalendarEventRemoved,
+  getActiveCalendarEventIds,
+  replaceSalesDeptAgents,
 } = require('./db');
 
-const WEBHOOK = process.env.WEBHOOK || 'https://kestates.bitrix24.com/rest/25113/eufjex37d22mug4s/';
+const WEBHOOK = process.env.WEBHOOK || 'https://kestates.bitrix24.com/rest/25113/j10najl3oflt3b4p/';
 const ENTITY_TYPE_ID = 1032;   // Property Inventory SPA
 const RENTAL_CATEGORY_ID = 57;
 
@@ -17,6 +21,7 @@ const F = {
   ASSIGNED: 'assignedById',
 };
 const SALE_RENT_MAP = { 13605: 'Sale', 13607: 'Rent' };
+const SALES_DEPARTMENT_ID = 5; // verified live against user.get -> UF_DEPARTMENT
 
 async function callApi(method, params) {
   const res = await fetch(WEBHOOK + method, {
@@ -72,16 +77,137 @@ async function batchGetItems(ids) {
   return items;
 }
 
-async function fetchUserNames(ids) {
+async function fetchUsers(ids) {
   const unique = [...new Set(ids.map(String).filter(Boolean))];
   const names = {};
-  if (!unique.length) return names;
+  const salesDeptIds = new Set();
+  if (!unique.length) return { names, salesDeptIds };
   const res = await callApi('user.get', { ID: unique });
   (res.result || []).forEach(u => {
     const name = [u.NAME, u.LAST_NAME].filter(Boolean).join(' ').trim() || u.LOGIN || u.ID;
     names[String(u.ID)] = name;
+    if ((u.UF_DEPARTMENT || []).map(Number).includes(SALES_DEPARTMENT_ID)) {
+      salesDeptIds.add(String(u.ID));
+    }
   });
-  return names;
+  return { names, salesDeptIds };
+}
+
+async function fetchSalesDeptRoster() {
+  const res = await callApi('user.get', { filter: { UF_DEPARTMENT: SALES_DEPARTMENT_ID, ACTIVE: true } });
+  return (res.result || []).map(u => ({
+    id: String(u.ID),
+    name: [u.NAME, u.LAST_NAME].filter(Boolean).join(' ').trim() || u.LOGIN || String(u.ID),
+  }));
+}
+
+function calendarSyncWindow() {
+  const now = new Date();
+  const from = new Date(now);
+  from.setMonth(from.getMonth() - 3);
+  const to = new Date(now);
+  to.setMonth(to.getMonth() + 6);
+  const fmt = d => d.toISOString().slice(0, 10);
+  return { from: fmt(from), to: fmt(to) };
+}
+
+// Deleted and declined (MEETING_STATUS 'N') events are not part of the agent's schedule.
+function isScheduleEvent(ev) {
+  return ev.DELETED !== 'Y' && ev.MEETING_STATUS !== 'N';
+}
+
+async function fetchCalendarEventsForUser(ownerId, from, to) {
+  const res = await callApi('calendar.event.get', { type: 'user', ownerId, from, to });
+  return (res.result || []).filter(isScheduleEvent);
+}
+
+// Normalize a Bitrix calendar event to a DB row. Throws on malformed timestamps.
+// For recurring events DATE_TO_TS_UTC is the end of the whole series, so the end of this
+// occurrence is DATE_FROM_TS_UTC + DT_LENGTH (seconds).
+function toCalendarEventRow(agent, ev) {
+  const eventId = agent.id + ':' + String(ev.ID);
+  const fromTs = Number(ev.DATE_FROM_TS_UTC);
+  const isRecurring = !!(ev.RRULE && typeof ev.RRULE === 'object');
+  const length = ev.DT_LENGTH === undefined || ev.DT_LENGTH === null || ev.DT_LENGTH === '' ? NaN : Number(ev.DT_LENGTH);
+  let date_to = '';
+  if (Number.isFinite(length)) {
+    date_to = new Date((fromTs + length) * 1000).toISOString();
+  } else if (!isRecurring && ev.DATE_TO_TS_UTC) {
+    date_to = new Date(Number(ev.DATE_TO_TS_UTC) * 1000).toISOString();
+  }
+  return {
+    event_id: eventId,
+    owner_id: agent.id,
+    owner_name: agent.name,
+    name: String(ev.NAME || ''),
+    date_from: new Date(fromTs * 1000).toISOString(),
+    date_to,
+    all_day: ev.DT_SKIP_TIME === 'Y' ? 1 : 0,
+    location: String(ev.LOCATION || ''),
+    is_recurring: isRecurring ? 1 : 0,
+  };
+}
+
+async function buildCalendarEvents() {
+  const roster = await fetchSalesDeptRoster();
+  const { from, to } = calendarSyncWindow();
+  const events = {};
+  const incompleteOwners = new Set();
+  for (const agent of roster) {
+    let raw;
+    try {
+      raw = await fetchCalendarEventsForUser(agent.id, from, to);
+    } catch (err) {
+      console.warn(`  [calendar] skipping ${agent.name} (${agent.id}): ${err.message}`);
+      incompleteOwners.add(agent.id);
+      continue;
+    }
+    for (const ev of raw) {
+      const eventId = agent.id + ':' + String(ev.ID);
+      try {
+        events[eventId] = toCalendarEventRow(agent, ev);
+      } catch (err) {
+        console.warn(`  [calendar] skipping malformed event ${eventId}: ${err.message}`);
+        incompleteOwners.add(agent.id);
+      }
+    }
+  }
+  return { roster, events, incompleteOwners };
+}
+
+// Persist roster + events and reconcile removals. An empty roster is treated as a Bitrix
+// hiccup: the calendar update is skipped entirely so nothing stored gets wiped.
+function applyCalendarUpdate(roster, events, incompleteOwners, now) {
+  let calCreated = 0, calUpdated = 0, calRestored = 0, calRemoved = 0;
+  if (roster.length === 0) {
+    console.warn(`[sync] Sales Department roster came back empty — skipping calendar update`);
+    return { calCreated, calUpdated, calRestored, calRemoved };
+  }
+  replaceSalesDeptAgents(roster, now);
+  const seenEvents = new Set();
+  for (const [eventId, ev] of Object.entries(events)) {
+    seenEvents.add(eventId);
+    const result = upsertCalendarEvent(ev, now);
+    if (result.firstSeen) calCreated++;
+    else if (result.status === 'updated') calUpdated++;
+    else if (result.status === 'restored') calRestored++;
+  }
+  calRemoved = reconcileRemovedCalendarEvents(seenEvents, incompleteOwners, now);
+  if (incompleteOwners.size) {
+    console.log(`[sync] Calendar removals skipped for ${incompleteOwners.size} agent(s) with incomplete data`);
+  }
+  return { calCreated, calUpdated, calRestored, calRemoved };
+}
+
+// Mark stored-but-unseen events removed, except for owners whose data was incomplete this run.
+function reconcileRemovedCalendarEvents(seenEvents, incompleteOwners, now) {
+  let calRemoved = 0;
+  for (const eventId of getActiveCalendarEventIds()) {
+    if (seenEvents.has(eventId)) continue;
+    if (incompleteOwners.has(eventId.split(':')[0])) continue;
+    if (markCalendarEventRemoved(eventId, now).changed) calRemoved++;
+  }
+  return calRemoved;
 }
 
 async function buildBookings() {
@@ -96,7 +222,7 @@ async function buildBookings() {
     }));
 
   const items = await batchGetItems(viewings.map(v => v.ownerId));
-  const userNames = await fetchUserNames(Object.values(items).map(i => i[F.ASSIGNED]));
+  const { names: userNames, salesDeptIds } = await fetchUsers(Object.values(items).map(i => i[F.ASSIGNED]));
 
   const bookings = {};
   for (const v of viewings) {
@@ -104,6 +230,7 @@ async function buildBookings() {
     const categoryId = String(item.categoryId || '');
     const saleRent = SALE_RENT_MAP[String(item[F.SALE_RENT] || '')] ||
       (categoryId === String(RENTAL_CATEGORY_ID) ? 'Rent' : 'Sale');
+    const assignedId = String(item[F.ASSIGNED] || '');
     bookings[v.activityId] = {
       activity_id: v.activityId,
       owner_id: v.ownerId,
@@ -113,7 +240,8 @@ async function buildBookings() {
       sale_rent: saleRent,
       address: String(item[F.ADDRESS] || ''),
       pipeline: categoryId === String(RENTAL_CATEGORY_ID) ? 'Rental Listings' : 'Sales Listings',
-      responsible: userNames[String(item[F.ASSIGNED] || '')] || 'Unknown',
+      responsible: userNames[assignedId] || 'Unknown',
+      sales_department: salesDeptIds.has(assignedId) ? 1 : 0,
     };
   }
   return bookings;
@@ -153,10 +281,16 @@ async function sync() {
     }
   }
 
+  console.log(`[sync] Fetching Sales Department calendars...`);
+  const { roster, events, incompleteOwners } = await buildCalendarEvents();
+  const { calCreated, calUpdated, calRestored, calRemoved } = applyCalendarUpdate(roster, events, incompleteOwners, now);
+  console.log(`[sync] Calendar events -> Created: ${calCreated}, Updated: ${calUpdated}, Restored: ${calRestored}, Removed: ${calRemoved}, Roster: ${roster.length} agents`);
+
   const summary = Object.fromEntries(getStatusSummary().map(r => [r.status, r.count]));
   console.log(`[sync] Done. Created: ${created}, Updated: ${updated}, Restored: ${restored}, Removed: ${removed}`);
   console.log(`[sync] DB totals -> active: ${summary.active || 0}, removed: ${summary.removed || 0}`);
-  return { created, updated, restored, removed };
+
+  return { created, updated, restored, removed, calCreated, calUpdated, calRestored, calRemoved };
 }
 
 if (require.main === module) {
@@ -166,4 +300,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { sync };
+module.exports = { sync, reconcileRemovedCalendarEvents, toCalendarEventRow, isScheduleEvent, applyCalendarUpdate };

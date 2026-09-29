@@ -251,6 +251,7 @@
     cursor: pointer; outline: none; transition: border-color .2s ease;
   }
   .cal-select:focus { border-color: var(--gold); }
+  .cal-controls { margin-bottom: 18px; gap: 20px; }
   .cal-weekdays { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; margin-bottom: 6px; }
   .cal-weekdays span { text-align: center; font-size: 9px; letter-spacing: .2em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
   .cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
@@ -268,6 +269,29 @@
   .cal-dot { width: 6px; height: 6px; border-radius: 50%; }
   .cal-dot.sale { background: #1E9E54; }
   .cal-dot.rent { background: #F0830A; }
+
+  /* ---------- Change password ---------- */
+  .pw-field { margin-bottom: 18px; }
+  .pw-field label {
+    display: block; font-size: 9px; letter-spacing: .24em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 7px; font-weight: 600;
+  }
+  .pw-field input {
+    width: 100%; padding: 10px 0; border: none; border-bottom: 1px solid var(--control-line); background: transparent;
+    font-family: 'Montserrat', sans-serif; font-size: 14px; color: var(--ink); outline: none;
+    transition: border-color .25s ease;
+  }
+  .pw-field input:focus { border-bottom-color: var(--gold); }
+  .pw-submit-btn {
+    width: 100%; margin-top: 4px; padding: 12px; border: 1px solid var(--ink); background: var(--ink); color: var(--bg);
+    font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase;
+    cursor: pointer; transition: opacity .2s ease;
+  }
+  .pw-submit-btn:disabled { opacity: .5; cursor: wait; }
+  .pw-msg { font-size: 12px; margin-top: 14px; display: none; }
+  .pw-msg.show { display: block; }
+  .pw-msg.error { color: #C0392B; }
+  .pw-msg.success { color: #1E9E54; }
 
   @media (max-width: 720px) {
     .topbar-inner { padding: 20px; }
@@ -302,10 +326,42 @@
       <svg class="theme-ico theme-ico-system" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
     </button>
       <button class="refresh-btn" id="refresh-btn">Refresh data</button>
+      <button class="refresh-btn" id="change-password-btn">Change Password</button>
       <button class="refresh-btn" id="logout-btn">Logout</button>
     </div>
   </div>
 </header>
+
+<!-- Change Password Modal -->
+<div id="change-password-modal" class="modal-overlay" onclick="if(event.target===this)closeChangePasswordModal()">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title-wrap">
+        <div class="eyebrow">Account</div>
+        <h2>Change Password</h2>
+      </div>
+      <button class="modal-close" onclick="closeChangePasswordModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <form id="change-password-form">
+        <div class="pw-field">
+          <label for="cp-current">Current Password</label>
+          <input type="password" id="cp-current" name="currentPassword" autocomplete="current-password" required>
+        </div>
+        <div class="pw-field">
+          <label for="cp-new">New Password</label>
+          <input type="password" id="cp-new" name="newPassword" autocomplete="new-password" required minlength="8">
+        </div>
+        <div class="pw-field">
+          <label for="cp-confirm">Confirm New Password</label>
+          <input type="password" id="cp-confirm" name="confirmPassword" autocomplete="new-password" required minlength="8">
+        </div>
+        <button type="submit" class="pw-submit-btn" id="cp-submit-btn">Update Password</button>
+        <div class="pw-msg" id="cp-msg"></div>
+      </form>
+    </div>
+  </div>
+</div>
 
 <div class="wrap">
 
@@ -313,6 +369,7 @@
 
   <div class="tabs">
     <button class="tab active" data-panel="panel-bookings">Bookings / Agent</button>
+    <button class="tab" data-panel="panel-sales-dept">Sales Department</button>
     <button class="tab" data-panel="panel-listings">Listing Details</button>
     <button class="tab" data-panel="panel-history">History &amp; Status</button>
   </div>
@@ -372,6 +429,20 @@
       <div class="card">
         <h2>Booking Calendar</h2>
         <div class="hint">Bookings by day for the selected filters. Click a day to see its bookings.</div>
+        <div class="controls cal-controls">
+          <div>
+            <label>Agent</label>
+            <select id="cal-agent-filter"><option value="all">All active agents</option></select>
+          </div>
+          <div>
+            <label>Sale / Rent</label>
+            <select id="cal-type-filter">
+              <option value="all">All</option>
+              <option value="Sale">Sale</option>
+              <option value="Rent">Rent</option>
+            </select>
+          </div>
+        </div>
         <div class="cal-nav">
           <button class="cal-nav-btn" id="cal-prev" aria-label="Previous month">&larr;</button>
           <select class="cal-select" id="cal-month-select" aria-label="Select month"></select>
@@ -383,6 +454,30 @@
           <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
         </div>
         <div class="cal-grid" id="cal-grid"></div>
+      </div>
+    </div>
+
+    <div id="panel-sales-dept" class="panel">
+      <div class="card">
+        <h2>Sales Department Calendar</h2>
+        <div class="hint">Real Bitrix24 calendar schedule for active agents in the Sales Department.</div>
+        <div class="controls cal-controls">
+          <div>
+            <label>Agent</label>
+            <select id="sd-agent-filter"><option value="all">All active agents</option></select>
+          </div>
+        </div>
+        <div class="cal-nav">
+          <button class="cal-nav-btn" id="sd-cal-prev" aria-label="Previous month">&larr;</button>
+          <select class="cal-select" id="sd-cal-month-select" aria-label="Select month"></select>
+          <select class="cal-select" id="sd-cal-year-select" aria-label="Select year"></select>
+          <button class="cal-nav-btn" id="sd-cal-today">Today</button>
+          <button class="cal-nav-btn" id="sd-cal-next" aria-label="Next month">&rarr;</button>
+        </div>
+        <div class="cal-weekdays">
+          <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+        </div>
+        <div class="cal-grid" id="sd-cal-grid"></div>
       </div>
     </div>
 
@@ -447,10 +542,10 @@ const ENTITY_TYPE_ID = 1032;         // Property Inventory SPA (for CRM detail l
 const NOW = new Date();
 const state = {
   period: 'all', agent: 'all', type: 'all', search: '', status: 'all',
-  calMonth: NOW.getMonth(), calYear: NOW.getFullYear(),
+  calAgent: 'all', calType: 'all', sdAgent: 'all',
 };
 let DATA = null; // { bookings: [...], summary: [...], events: [...], meta: {...} }
-let CALENDAR_DAY_MAP = {}; // 'YYYY-MM-DD' -> bookings on that day, for the currently rendered month
+let SALES_CALENDAR = null; // { agents: [{id,name}], events: [...normalized event bookings] }
 
 // ---------- Backend API ----------
 async function apiGet(url) {
@@ -480,7 +575,8 @@ async function loadData() {
     address: b.address || '',
     pipeline: b.pipeline || '',
     responsible: b.responsible || 'Unknown',
-    status: b.status || 'active'
+    status: b.status || 'active',
+    sales_department: !!b.sales_department
   }));
 
   return {
@@ -491,6 +587,40 @@ async function loadData() {
       total_activities: bookings.length,
       generated: new Date().toISOString()
     }
+  };
+}
+
+// Loads the Sales Department's real Bitrix24 calendar schedule (roster + events)
+async function loadSalesCalendarData() {
+  const payload = await apiGet('/api/sales-calendar');
+  // date_from is a UTC ISO string; derive a zone-less LOCAL 'YYYY-MM-DDTHH:mm' so the
+  // calendar day key, inPeriod(), and the modal's local times all agree.
+  const localStamp = iso => {
+    const d = new Date(iso || '');
+    if (isNaN(d)) return '';
+    const p = n => String(n).padStart(2, '0');
+    return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
+      'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+  };
+  const events = (payload.events || []).map(ev => ({
+    kind: 'event',
+    booking_date: localStamp(ev.date_from),
+    date_from: ev.date_from || '',
+    date_to: ev.date_to || '',
+    all_day: !!ev.all_day,
+    location: ev.location || '',
+    listing: ev.name || '',
+    client_name: '',
+    client_phone: '',
+    address: ev.location || '',
+    pipeline: '',
+    responsible: ev.owner_name || 'Unknown',
+    sale_rent: '',
+    status: 'active',
+  }));
+  return {
+    agents: payload.agents || [],
+    events: events,
   };
 }
 
@@ -521,17 +651,42 @@ function inPeriod(dateStr, period) {
   return d >= cutoff;
 }
 
+function matchesPeriodAndSearch(b) {
+  if (!inPeriod(b.booking_date, state.period)) return false;
+  if (state.search) {
+    const q = state.search.toLowerCase();
+    const hay = (b.client_name + ' ' + b.client_phone + ' ' + b.address + ' ' + b.responsible + ' ' + b.listing + ' ' + b.pipeline).toLowerCase();
+    if (!hay.includes(q)) return false;
+  }
+  return true;
+}
+
 function filteredBookings() {
   return DATA.bookings.filter(b => {
-    if (!inPeriod(b.booking_date, state.period)) return false;
+    if (!matchesPeriodAndSearch(b)) return false;
     if (state.agent !== 'all' && b.responsible !== state.agent) return false;
     if (state.type !== 'all' && b.sale_rent !== state.type) return false;
     if (state.status !== 'all' && b.status !== state.status) return false;
-    if (state.search) {
-      const q = state.search.toLowerCase();
-      const hay = (b.client_name + ' ' + b.client_phone + ' ' + b.address + ' ' + b.responsible + ' ' + b.listing + ' ' + b.pipeline).toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
+    return true;
+  });
+}
+
+function calendarBookings() {
+  return filteredBookings().filter(b => {
+    if (state.calAgent !== 'all' && b.responsible !== state.calAgent) return false;
+    if (state.calType !== 'all' && b.sale_rent !== state.calType) return false;
+    return true;
+  });
+}
+
+// Sales Department tab: real Bitrix24 calendar events for the department's
+// active roster, independent of the Bookings/Agent tab's filters, but
+// still respects Period and Search, and its own Agent dropdown.
+function salesDeptCalendarEvents() {
+  if (!SALES_CALENDAR) return [];
+  return SALES_CALENDAR.events.filter(ev => {
+    if (!matchesPeriodAndSearch(ev)) return false;
+    if (state.sdAgent !== 'all' && ev.responsible !== state.sdAgent) return false;
     return true;
   });
 }
@@ -626,7 +781,8 @@ function renderAll() {
   const bookings = filteredBookings();
   renderStats(bookings);
   renderChart(bookings);
-  renderCalendar(bookings);
+  bookingCalendar.render();
+  salesDeptCalendar.render();
   renderDetails(bookings);
   renderStatusStats();
   renderHistory();
@@ -644,99 +800,142 @@ function dateKey(year, month, day) {
 const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
 
-function populateCalendarSelects() {
-  const monthSel = document.getElementById('cal-month-select');
-  monthSel.innerHTML = MONTH_NAMES.map((m, i) => '<option value="' + i + '">' + m + '</option>').join('');
+// Reusable calendar: each instance owns its own month/year/day-map, so
+// multiple calendars (Booking Calendar, Sales Department) can be browsed
+// independently without stepping on each other's state.
+function makeCalendarController(opts) {
+  // opts: { gridId, monthSelectId, yearSelectId, prevId, nextId, todayId, getBookings }
+  const cal = { month: NOW.getMonth(), year: NOW.getFullYear(), dayMap: {} };
 
-  const years = new Set([NOW.getFullYear()]);
-  DATA.bookings.forEach(b => {
-    const y = parseInt((b.booking_date || '').slice(0, 4), 10);
-    if (!isNaN(y)) years.add(y);
-  });
-  const yearSel = document.getElementById('cal-year-select');
-  yearSel.innerHTML = [...years].sort((a, b) => a - b)
-    .map(y => '<option value="' + y + '">' + y + '</option>').join('');
-}
+  function populateSelects() {
+    const monthSel = document.getElementById(opts.monthSelectId);
+    monthSel.innerHTML = MONTH_NAMES.map((m, i) => '<option value="' + i + '">' + m + '</option>').join('');
 
-function syncCalendarSelects(year, month) {
-  const yearSel = document.getElementById('cal-year-select');
-  const hasYear = [...yearSel.options].some(o => Number(o.value) === year);
-  if (!hasYear) {
-    const years = [...yearSel.options].map(o => Number(o.value)).concat(year).sort((a, b) => a - b);
-    yearSel.innerHTML = years.map(y => '<option value="' + y + '">' + y + '</option>').join('');
-  }
-  yearSel.value = String(year);
-  document.getElementById('cal-month-select').value = String(month);
-}
-
-function renderCalendar(bookings) {
-  const grid = document.getElementById('cal-grid');
-  const { calYear: year, calMonth: month } = state;
-  syncCalendarSelects(year, month);
-
-  const dayMap = {};
-  bookings.forEach(b => {
-    if (b.status === 'removed') return;
-    const key = (b.booking_date || '').slice(0, 10);
-    if (!key) return;
-    (dayMap[key] = dayMap[key] || []).push(b);
-  });
-  CALENDAR_DAY_MAP = dayMap;
-
-  const firstWeekday = (new Date(year, month, 1).getDay() + 6) % 7; // Monday = 0
-  const totalDays = daysInMonth(year, month);
-  const today = dateKey(NOW.getFullYear(), NOW.getMonth(), NOW.getDate());
-
-  const cells = [];
-  for (let i = 0; i < firstWeekday; i++) cells.push(null);
-  for (let d = 1; d <= totalDays; d++) cells.push(d);
-  while (cells.length % 7 !== 0) cells.push(null);
-
-  grid.innerHTML = cells.map(d => {
-    if (!d) return '<div class="cal-cell empty"></div>';
-    const key = dateKey(year, month, d);
-    const items = dayMap[key] || [];
-    const hasSale = items.some(b => b.sale_rent === 'Sale');
-    const hasRent = items.some(b => b.sale_rent === 'Rent');
-    const dots = items.length ? '<div class="cal-dots">' +
-      (hasSale ? '<span class="cal-dot sale"></span>' : '') +
-      (hasRent ? '<span class="cal-dot rent"></span>' : '') +
-      '</div>' : '';
-    const count = items.length ? '<div class="cal-count">' + items.length + '</div>' : '';
-    const classes = 'cal-cell' + (items.length ? ' has-bookings' : '') + (key === today ? ' today' : '');
-    const attrs = items.length ? ' data-date="' + key + '" tabindex="0" role="button"' : '';
-    return '<div class="' + classes + '"' + attrs + '><div class="cal-daynum">' + d + '</div>' + count + dots + '</div>';
-  }).join('');
-
-  grid.querySelectorAll('.cal-cell.has-bookings').forEach(cell => {
-    cell.addEventListener('click', () => openDayModal(cell.dataset.date));
-    cell.addEventListener('keydown', e => {
-      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDayModal(cell.dataset.date); }
+    const years = new Set([NOW.getFullYear()]);
+    opts.getBookings().forEach(b => {
+      const y = parseInt((b.booking_date || '').slice(0, 4), 10);
+      if (!isNaN(y)) years.add(y);
     });
-  });
+    const yearSel = document.getElementById(opts.yearSelectId);
+    yearSel.innerHTML = [...years].sort((a, b) => a - b)
+      .map(y => '<option value="' + y + '">' + y + '</option>').join('');
+  }
+
+  function syncSelects() {
+    const yearSel = document.getElementById(opts.yearSelectId);
+    const hasYear = [...yearSel.options].some(o => Number(o.value) === cal.year);
+    if (!hasYear) {
+      const years = [...yearSel.options].map(o => Number(o.value)).concat(cal.year).sort((a, b) => a - b);
+      yearSel.innerHTML = years.map(y => '<option value="' + y + '">' + y + '</option>').join('');
+    }
+    yearSel.value = String(cal.year);
+    document.getElementById(opts.monthSelectId).value = String(cal.month);
+  }
+
+  function render() {
+    const bookings = opts.getBookings();
+    const grid = document.getElementById(opts.gridId);
+    syncSelects();
+
+    const dayMap = {};
+    bookings.forEach(b => {
+      if (b.status === 'removed') return;
+      const key = (b.booking_date || '').slice(0, 10);
+      if (!key) return;
+      (dayMap[key] = dayMap[key] || []).push(b);
+    });
+    cal.dayMap = dayMap;
+
+    const firstWeekday = (new Date(cal.year, cal.month, 1).getDay() + 6) % 7; // Monday = 0
+    const totalDays = daysInMonth(cal.year, cal.month);
+    const today = dateKey(NOW.getFullYear(), NOW.getMonth(), NOW.getDate());
+
+    const cells = [];
+    for (let i = 0; i < firstWeekday; i++) cells.push(null);
+    for (let d = 1; d <= totalDays; d++) cells.push(d);
+    while (cells.length % 7 !== 0) cells.push(null);
+
+    grid.innerHTML = cells.map(d => {
+      if (!d) return '<div class="cal-cell empty"></div>';
+      const key = dateKey(cal.year, cal.month, d);
+      const items = dayMap[key] || [];
+      const hasSale = items.some(b => b.sale_rent === 'Sale');
+      const hasRent = items.some(b => b.sale_rent === 'Rent');
+      const dots = items.length ? '<div class="cal-dots">' +
+        (hasSale ? '<span class="cal-dot sale"></span>' : '') +
+        (hasRent ? '<span class="cal-dot rent"></span>' : '') +
+        '</div>' : '';
+      const count = items.length ? '<div class="cal-count">' + items.length + '</div>' : '';
+      const classes = 'cal-cell' + (items.length ? ' has-bookings' : '') + (key === today ? ' today' : '');
+      const attrs = items.length ? ' data-date="' + key + '" tabindex="0" role="button"' : '';
+      return '<div class="' + classes + '"' + attrs + '><div class="cal-daynum">' + d + '</div>' + count + dots + '</div>';
+    }).join('');
+
+    grid.querySelectorAll('.cal-cell.has-bookings').forEach(cell => {
+      cell.addEventListener('click', () => openDayModal(cell.dataset.date, cal.dayMap));
+      cell.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDayModal(cell.dataset.date, cal.dayMap); }
+      });
+    });
+  }
+
+  function shift(delta) {
+    cal.month += delta;
+    if (cal.month < 0) { cal.month = 11; cal.year--; }
+    if (cal.month > 11) { cal.month = 0; cal.year++; }
+    render();
+  }
+
+  function goToday() {
+    cal.month = NOW.getMonth();
+    cal.year = NOW.getFullYear();
+    render();
+  }
+
+  function wire() {
+    document.getElementById(opts.prevId).addEventListener('click', () => shift(-1));
+    document.getElementById(opts.nextId).addEventListener('click', () => shift(1));
+    document.getElementById(opts.todayId).addEventListener('click', goToday);
+    document.getElementById(opts.monthSelectId).addEventListener('change', e => { cal.month = Number(e.target.value); render(); });
+    document.getElementById(opts.yearSelectId).addEventListener('change', e => { cal.year = Number(e.target.value); render(); });
+  }
+
+  return { render, shift, goToday, wire, populateSelects };
 }
 
-function shiftCalendar(delta) {
-  state.calMonth += delta;
-  if (state.calMonth < 0) { state.calMonth = 11; state.calYear--; }
-  if (state.calMonth > 11) { state.calMonth = 0; state.calYear++; }
-  renderCalendar(filteredBookings());
-}
+const bookingCalendar = makeCalendarController({
+  gridId: 'cal-grid', monthSelectId: 'cal-month-select', yearSelectId: 'cal-year-select',
+  prevId: 'cal-prev', nextId: 'cal-next', todayId: 'cal-today',
+  getBookings: calendarBookings,
+});
 
-function goToCurrentMonth() {
-  state.calMonth = NOW.getMonth();
-  state.calYear = NOW.getFullYear();
-  renderCalendar(filteredBookings());
-}
+const salesDeptCalendar = makeCalendarController({
+  gridId: 'sd-cal-grid', monthSelectId: 'sd-cal-month-select', yearSelectId: 'sd-cal-year-select',
+  prevId: 'sd-cal-prev', nextId: 'sd-cal-next', todayId: 'sd-cal-today',
+  getBookings: salesDeptCalendarEvents,
+});
 
-function openDayModal(key) {
-  const items = CALENDAR_DAY_MAP[key] || [];
+function openDayModal(key, dayMap) {
+  const items = dayMap[key] || [];
+  const isEvents = items.length > 0 && items[0].kind === 'event';
   const d = new Date(key + 'T00:00:00');
   document.getElementById('day-title').textContent =
     d.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) +
-    ' · ' + items.length + (items.length === 1 ? ' booking' : ' bookings');
+    ' · ' + items.length + (items.length === 1 ? (isEvents ? ' event' : ' booking') : (isEvents ? ' events' : ' bookings'));
 
   document.getElementById('day-body').innerHTML = items.map(b => {
+    if (b.kind === 'event') {
+      const from = b.date_from ? new Date(b.date_from).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+      const to = b.date_to ? new Date(b.date_to).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+      const time = b.all_day ? 'All day' : [from, to].filter(Boolean).join(' – ');
+      return '<div class="log-entry">' +
+        '<div class="log-main">' +
+          '<div class="log-detail">' + cellText(b.listing) + '</div>' +
+          '<div class="log-time">' + esc(time) + (b.location ? ' &middot; ' + cellText(b.location) : '') + '</div>' +
+          '<div class="log-time">' + cellText(b.responsible) + '</div>' +
+        '</div>' +
+      '</div>';
+    }
     return '<div class="log-entry">' +
       '<div class="log-main">' +
         '<div class="log-detail">' + cellText(b.client_name) + ' &middot; ' + saleRentBadge(b.sale_rent) + ' ' + statusBadge(b.status) + '</div>' +
@@ -835,6 +1034,26 @@ function populateAgentOptions() {
   sel.innerHTML = '<option value="all">All agents</option>' + agents.map(a => '<option value="' + esc(a) + '">' + esc(a) + '</option>').join('');
 }
 
+function populateCalAgentOptions() {
+  const activeAgents = [...new Set(
+    DATA.bookings.filter(b => b.status === 'active' && b.responsible !== 'Unknown').map(b => b.responsible)
+  )].sort();
+  const sel = document.getElementById('cal-agent-filter');
+  const prev = state.calAgent;
+  sel.innerHTML = '<option value="all">All active agents</option>' + activeAgents.map(a => '<option value="' + esc(a) + '">' + esc(a) + '</option>').join('');
+  if (activeAgents.includes(prev)) sel.value = prev;
+  else state.calAgent = 'all';
+}
+
+function populateSalesDeptAgentOptions() {
+  const agents = (SALES_CALENDAR ? SALES_CALENDAR.agents : []).map(a => a.name).sort();
+  const sel = document.getElementById('sd-agent-filter');
+  const prev = state.sdAgent;
+  sel.innerHTML = '<option value="all">All active agents</option>' + agents.map(a => '<option value="' + esc(a) + '">' + esc(a) + '</option>').join('');
+  if (agents.includes(prev)) sel.value = prev;
+  else state.sdAgent = 'all';
+}
+
 function wireControls() {
   document.querySelectorAll('.tab').forEach(t => {
     t.addEventListener('click', () => {
@@ -850,17 +1069,12 @@ function wireControls() {
   document.getElementById('status-filter').addEventListener('change', e => { state.status = e.target.value; renderAll(); });
   document.getElementById('search').addEventListener('input', debounce(e => { state.search = e.target.value.trim(); renderAll(); }, 150));
 
-  document.getElementById('cal-prev').addEventListener('click', () => shiftCalendar(-1));
-  document.getElementById('cal-next').addEventListener('click', () => shiftCalendar(1));
-  document.getElementById('cal-today').addEventListener('click', goToCurrentMonth);
-  document.getElementById('cal-month-select').addEventListener('change', e => {
-    state.calMonth = Number(e.target.value);
-    renderCalendar(filteredBookings());
-  });
-  document.getElementById('cal-year-select').addEventListener('change', e => {
-    state.calYear = Number(e.target.value);
-    renderCalendar(filteredBookings());
-  });
+  document.getElementById('cal-agent-filter').addEventListener('change', e => { state.calAgent = e.target.value; bookingCalendar.render(); });
+  document.getElementById('cal-type-filter').addEventListener('change', e => { state.calType = e.target.value; bookingCalendar.render(); });
+  document.getElementById('sd-agent-filter').addEventListener('change', e => { state.sdAgent = e.target.value; salesDeptCalendar.render(); });
+
+  bookingCalendar.wire();
+  salesDeptCalendar.wire();
 }
 
 function showError(msg) {
@@ -883,8 +1097,12 @@ async function load() {
   setLoading(true);
   try {
     DATA = await loadData();
+    SALES_CALENDAR = await loadSalesCalendarData();
     populateAgentOptions();
-    populateCalendarSelects();
+    populateCalAgentOptions();
+    populateSalesDeptAgentOptions();
+    bookingCalendar.populateSelects();
+    salesDeptCalendar.populateSelects();
     renderAll();
     document.getElementById('last-updated').textContent = 'Updated ' + fmtDate(DATA.meta.generated);
     document.getElementById('generated').textContent =
@@ -946,6 +1164,58 @@ document.getElementById('logout-btn').addEventListener('click', async () => {
     await fetch('/api/logout', { method: 'POST' });
   } finally {
     window.location.href = '/login';
+  }
+});
+
+function openChangePasswordModal() {
+  document.getElementById('change-password-form').reset();
+  const msg = document.getElementById('cp-msg');
+  msg.textContent = '';
+  msg.className = 'pw-msg';
+  document.getElementById('change-password-modal').classList.add('open');
+}
+
+function closeChangePasswordModal() {
+  document.getElementById('change-password-modal').classList.remove('open');
+}
+
+function setChangePasswordMsg(text, kind) {
+  const msg = document.getElementById('cp-msg');
+  msg.textContent = text;
+  msg.className = 'pw-msg show' + (kind ? ' ' + kind : '');
+}
+
+document.getElementById('change-password-btn').addEventListener('click', openChangePasswordModal);
+
+document.getElementById('change-password-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('cp-submit-btn');
+  const currentPassword = document.getElementById('cp-current').value;
+  const newPassword = document.getElementById('cp-new').value;
+  const confirmPassword = document.getElementById('cp-confirm').value;
+
+  if (newPassword !== confirmPassword) {
+    setChangePasswordMsg('New password and confirmation do not match.', 'error');
+    return;
+  }
+
+  btn.disabled = true;
+  btn.textContent = 'Updating...';
+  try {
+    const res = await fetch('/api/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ currentPassword, newPassword }),
+    });
+    const payload = await res.json();
+    if (!res.ok) throw new Error(payload.error || 'Failed to update password');
+    setChangePasswordMsg('Password updated successfully.', 'success');
+    document.getElementById('change-password-form').reset();
+  } catch (err) {
+    setChangePasswordMsg(err.message || String(err), 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Update Password';
   }
 });
 wireControls();

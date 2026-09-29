@@ -13,8 +13,14 @@ const {
   getSession,
   deleteSession,
   deleteExpiredSessions,
+  getCalendarEvents,
+  getSalesDeptAgents,
 } = require('./db');
-const { verifyPassword, generateSessionToken, SESSION_DURATION_MS } = require('./auth');
+const { verifyPassword, generateSessionToken, changePassword, SESSION_DURATION_MS } = require('./auth');
+
+// Single-admin app: the only credential row is 'admin' (see db.js seeding).
+// Sessions don't carry a username since there is exactly one account.
+const ADMIN_USERNAME = 'admin';
 
 const PORT = process.env.PORT || 3055;
 const DASHBOARD = path.join(__dirname, 'index.html');
@@ -147,6 +153,20 @@ const server = http.createServer(async (req, res) => {
       });
     }
 
+    if (req.method === 'POST' && p === '/api/change-password') {
+      const body = await readBody(req);
+      const { currentPassword, newPassword } = body;
+      if (typeof currentPassword !== 'string' || typeof newPassword !== 'string' || !currentPassword || !newPassword) {
+        return send(req, res, 400, { error: 'currentPassword and newPassword are required' });
+      }
+      const result = changePassword(ADMIN_USERNAME, currentPassword, newPassword);
+      if (!result.ok) {
+        const code = result.error === 'current password is incorrect' ? 401 : 400;
+        return send(req, res, code, { error: result.error });
+      }
+      return send(req, res, 200, { ok: true });
+    }
+
     if (req.method === 'GET' && p === '/') {
       const session = getSessionFromRequest(req);
       return send(req, res, 200, session ? getDashboardHtml() : getLoginHtml());
@@ -167,6 +187,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && p === '/api/agents') {
       return send(req, res, 200, { agents: getAgentSummary() });
+    }
+
+    if (req.method === 'GET' && p === '/api/sales-calendar') {
+      return send(req, res, 200, { agents: getSalesDeptAgents(), events: getCalendarEvents() });
     }
 
     if (req.method === 'GET' && p === '/api/history') {
