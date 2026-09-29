@@ -120,12 +120,14 @@ async function buildCalendarEvents() {
   const roster = await fetchSalesDeptRoster();
   const { from, to } = calendarSyncWindow();
   const events = {};
+  const incompleteOwners = new Set();
   for (const agent of roster) {
     let raw;
     try {
       raw = await fetchCalendarEventsForUser(agent.id, from, to);
     } catch (err) {
       console.warn(`  [calendar] skipping ${agent.name} (${agent.id}): ${err.message}`);
+      incompleteOwners.add(agent.id);
       continue;
     }
     for (const ev of raw) {
@@ -144,10 +146,22 @@ async function buildCalendarEvents() {
         };
       } catch (err) {
         console.warn(`  [calendar] skipping malformed event ${eventId}: ${err.message}`);
+        incompleteOwners.add(agent.id);
       }
     }
   }
-  return { roster, events };
+  return { roster, events, incompleteOwners };
+}
+
+// Mark stored-but-unseen events removed, except for owners whose data was incomplete this run.
+function reconcileRemovedCalendarEvents(seenEvents, incompleteOwners, now) {
+  let calRemoved = 0;
+  for (const eventId of getActiveCalendarEventIds()) {
+    if (seenEvents.has(eventId)) continue;
+    if (incompleteOwners.has(eventId.split(':')[0])) continue;
+    if (markCalendarEventRemoved(eventId, now).changed) calRemoved++;
+  }
+  return calRemoved;
 }
 
 async function buildBookings() {
@@ -222,7 +236,7 @@ async function sync() {
   }
 
   console.log(`[sync] Fetching Sales Department calendars...`);
-  const { roster, events } = await buildCalendarEvents();
+  const { roster, events, incompleteOwners } = await buildCalendarEvents();
   replaceSalesDeptAgents(roster, now);
 
   let calCreated = 0, calUpdated = 0, calRestored = 0, calRemoved = 0;
@@ -235,12 +249,9 @@ async function sync() {
     else if (result.status === 'restored') calRestored++;
   }
 
-  const storedEvents = getActiveCalendarEventIds();
-  for (const eventId of storedEvents) {
-    if (!seenEvents.has(eventId)) {
-      const didChange = markCalendarEventRemoved(eventId, now);
-      if (didChange.changed) calRemoved++;
-    }
+  calRemoved = reconcileRemovedCalendarEvents(seenEvents, incompleteOwners, now);
+  if (incompleteOwners.size) {
+    console.log(`[sync] Calendar removals skipped for ${incompleteOwners.size} agent(s) with incomplete data`);
   }
   console.log(`[sync] Calendar events -> Created: ${calCreated}, Updated: ${calUpdated}, Restored: ${calRestored}, Removed: ${calRemoved}, Roster: ${roster.length} agents`);
 
@@ -258,4 +269,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { sync };
+module.exports = { sync, reconcileRemovedCalendarEvents };
