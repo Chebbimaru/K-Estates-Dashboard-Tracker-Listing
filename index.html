@@ -273,6 +273,24 @@
   .am-section h3 { font-size: 10px; font-weight: 700; letter-spacing: .24em; text-transform: uppercase; color: var(--muted); margin: 22px 0 2px; padding-bottom: 8px; border-bottom: 1px solid var(--hairline); }
   .am-section:first-child h3 { margin-top: 0; }
   .am-empty { font-size: 12px; color: var(--muted); padding: 12px 2px; }
+  .modal.modal-wide { max-width: 940px; }
+  .am-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 28px; align-items: start; }
+  .am-cal { position: sticky; top: 0; }
+  .am-cal .cal-nav { gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .am-cal .cal-select { font-size: 10px; padding: 6px 6px; }
+  .am-cal-today { display: flex; justify-content: center; margin-bottom: 12px; }
+  .am-cal .cal-weekdays, .am-cal .cal-grid { gap: 3px; }
+  .am-cal .cal-cell { min-height: 40px; padding: 4px; }
+  .am-cal .cal-count { font-size: 12px; }
+  .am-cal .cal-dots { top: 5px; right: 5px; gap: 3px; }
+  .cal-dot.bk { background: var(--series-bookings); }
+  .cal-dot.ev { background: var(--series-events); }
+  .cal-cell.selected { border-color: var(--gold); background: var(--gold-soft); }
+  .am-legend { display: flex; gap: 16px; justify-content: center; margin-top: 12px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+  .am-legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .am-daybar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; padding: 8px 12px; font-size: 11px; background: var(--row-fill); border: 1px solid var(--hairline); }
+  .am-clear { background: transparent; border: 1px solid var(--control-line); color: var(--ink); padding: 5px 10px; cursor: pointer; font-family: 'Montserrat', sans-serif; font-size: 9px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase; }
+  .am-clear:hover { background: var(--gold); border-color: var(--gold); color: #fff; }
 
   /* ---------- Calendar ---------- */
   .cal-nav { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 16px; }
@@ -338,6 +356,8 @@
     .search-box { max-width: none; }
     .cal-cell { min-height: 40px; padding: 4px; }
     .cal-select { font-size: 10px; padding: 6px 8px; }
+    .am-layout { grid-template-columns: 1fr; }
+    .am-cal { position: static; }
   }
 </style>
 </head>
@@ -398,6 +418,44 @@
   </div>
 </div>
 
+<div id="agent-modal" class="modal-overlay" onclick="if(event.target===this)closeAgentModal()">
+  <div class="modal modal-wide">
+    <div class="modal-head">
+      <div class="modal-title-wrap">
+        <div class="eyebrow">Agent</div>
+        <h2 id="agent-title"></h2>
+        <div class="log-time" id="agent-summary"></div>
+      </div>
+      <button class="modal-close" onclick="closeAgentModal()" aria-label="Close">&times;</button>
+    </div>
+    <div class="modal-body">
+      <div class="am-layout">
+        <div class="am-main">
+          <div id="agent-daybar" class="am-daybar" style="display:none"></div>
+          <div id="agent-body"></div>
+        </div>
+        <aside class="am-cal" aria-label="Agent calendar">
+          <div class="cal-nav">
+            <button class="cal-nav-btn" id="am-cal-prev" aria-label="Previous month">&larr;</button>
+            <select class="cal-select" id="am-cal-month-select" aria-label="Select month"></select>
+            <select class="cal-select" id="am-cal-year-select" aria-label="Select year"></select>
+            <button class="cal-nav-btn" id="am-cal-next" aria-label="Next month">&rarr;</button>
+          </div>
+          <div class="am-cal-today"><button class="cal-nav-btn" id="am-cal-today">Today</button></div>
+          <div class="cal-weekdays">
+            <span>Mon</span><span>Tue</span><span>Wed</span><span>Thu</span><span>Fri</span><span>Sat</span><span>Sun</span>
+          </div>
+          <div class="cal-grid" id="am-cal-grid"></div>
+          <div class="am-legend">
+            <span><i class="cal-dot bk"></i>Booking</span>
+            <span><i class="cal-dot ev"></i>Event created</span>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="bc-tip" class="bc-tip" role="status"></div>
 
 <div class="wrap">
@@ -406,7 +464,7 @@
 
   <div class="tabs">
     <button class="tab active" data-panel="panel-bookings">Bookings / Agent</button>
-    <button class="tab" data-panel="panel-sales-dept">Sales Department</button>
+    <button class="tab" data-panel="panel-sales-dept">Calendar Events</button>
     <button class="tab" data-panel="panel-listings">Listing Details</button>
     <button class="tab" data-panel="panel-history">History &amp; Status</button>
   </div>
@@ -846,6 +904,8 @@ function renderBookingsTable(entries) {
 // and the Agent filter (Type/Status are booking-only concepts, so they don't apply to events).
 // Agent name -> chart entry (with bookingList / eventList) from the latest render; read by the bar-click modal.
 let AGENT_DETAIL = {};
+// The agent shown in the bar-click modal: bookings + created events for its calendar, and the selected day filter.
+let AGENT_MODAL = { name: null, items: [], day: null };
 
 function renderChart(bookings) {
   const el = document.getElementById('bookings-chart');
@@ -1028,7 +1088,13 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
 // independently without stepping on each other's state.
 function makeCalendarController(opts) {
   // opts: { gridId, monthSelectId, yearSelectId, prevId, nextId, todayId, getBookings }
+  // optional: dotsFor(items) -> dot markup (default: sale/rent dots), onDayClick(key, dayMap) (default: day popup),
+  //           selectedDay() -> 'YYYY-MM-DD' | null (highlights that cell)
   const cal = { month: NOW.getMonth(), year: NOW.getFullYear(), dayMap: {} };
+  const defaultDots = items =>
+    (items.some(b => b.sale_rent === 'Sale') ? '<span class="cal-dot sale"></span>' : '') +
+    (items.some(b => b.sale_rent === 'Rent') ? '<span class="cal-dot rent"></span>' : '');
+  const onDay = key => (opts.onDayClick || openDayModal)(key, cal.dayMap);
 
   function populateSelects() {
     const monthSel = document.getElementById(opts.monthSelectId);
@@ -1082,22 +1148,18 @@ function makeCalendarController(opts) {
       if (!d) return '<div class="cal-cell empty"></div>';
       const key = dateKey(cal.year, cal.month, d);
       const items = dayMap[key] || [];
-      const hasSale = items.some(b => b.sale_rent === 'Sale');
-      const hasRent = items.some(b => b.sale_rent === 'Rent');
-      const dots = items.length ? '<div class="cal-dots">' +
-        (hasSale ? '<span class="cal-dot sale"></span>' : '') +
-        (hasRent ? '<span class="cal-dot rent"></span>' : '') +
-        '</div>' : '';
+      const dots = items.length ? '<div class="cal-dots">' + (opts.dotsFor || defaultDots)(items) + '</div>' : '';
       const count = items.length ? '<div class="cal-count">' + items.length + '</div>' : '';
-      const classes = 'cal-cell' + (items.length ? ' has-bookings' : '') + (key === today ? ' today' : '');
+      const classes = 'cal-cell' + (items.length ? ' has-bookings' : '') + (key === today ? ' today' : '') +
+        (opts.selectedDay && opts.selectedDay() === key ? ' selected' : '');
       const attrs = items.length ? ' data-date="' + key + '" tabindex="0" role="button"' : '';
       return '<div class="' + classes + '"' + attrs + '><div class="cal-daynum">' + d + '</div>' + count + dots + '</div>';
     }).join('');
 
     grid.querySelectorAll('.cal-cell.has-bookings').forEach(cell => {
-      cell.addEventListener('click', () => openDayModal(cell.dataset.date, cal.dayMap));
+      cell.addEventListener('click', () => onDay(cell.dataset.date));
       cell.addEventListener('keydown', e => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDayModal(cell.dataset.date, cal.dayMap); }
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onDay(cell.dataset.date); }
       });
     });
   }
@@ -1128,15 +1190,20 @@ function makeCalendarController(opts) {
     return nearestDayKey(Object.keys(cal.dayMap), dateKey(NOW.getFullYear(), NOW.getMonth(), NOW.getDate()));
   }
 
-  // Jump the grid to the month containing key and open that day's popup.
-  function showDay(key) {
+  // Jump the grid to the month containing key.
+  function goToDay(key) {
     cal.year = Number(key.slice(0, 4));
     cal.month = Number(key.slice(5, 7)) - 1;
     render();
+  }
+
+  // Jump the grid to the month containing key and open that day's popup.
+  function showDay(key) {
+    goToDay(key);
     openDayModal(key, cal.dayMap);
   }
 
-  return { render, shift, goToday, wire, populateSelects, nearestDay, showDay };
+  return { render, shift, goToday, wire, populateSelects, nearestDay, goToDay, showDay };
 }
 
 const bookingCalendar = makeCalendarController({
@@ -1149,6 +1216,18 @@ const salesDeptCalendar = makeCalendarController({
   gridId: 'sd-cal-grid', monthSelectId: 'sd-cal-month-select', yearSelectId: 'sd-cal-year-select',
   prevId: 'sd-cal-prev', nextId: 'sd-cal-next', todayId: 'sd-cal-today',
   getBookings: salesDeptCalendarEvents,
+});
+
+// Small calendar inside the agent modal: bookings and created events for the agent that was clicked.
+const agentCalendar = makeCalendarController({
+  gridId: 'am-cal-grid', monthSelectId: 'am-cal-month-select', yearSelectId: 'am-cal-year-select',
+  prevId: 'am-cal-prev', nextId: 'am-cal-next', todayId: 'am-cal-today',
+  getBookings: () => AGENT_MODAL.items,
+  dotsFor: items =>
+    (items.some(b => b.kind !== 'event') ? '<span class="cal-dot bk"></span>' : '') +
+    (items.some(b => b.kind === 'event') ? '<span class="cal-dot ev"></span>' : ''),
+  onDayClick: key => setAgentDay(key),
+  selectedDay: () => AGENT_MODAL.day,
 });
 
 function openDayModal(key, dayMap) {
@@ -1296,7 +1375,7 @@ function activateTab(panelId) {
 }
 
 // Bar click: list everything behind one agent's column (their bookings and the events they created),
-// exactly as counted by the chart under the current filters.
+// exactly as counted by the chart under the current filters, plus a small calendar of the same items.
 function openAgentModal(name) {
   const d = AGENT_DETAIL[name];
   if (!d) return;
@@ -1305,6 +1384,32 @@ function openAgentModal(name) {
   document.getElementById('agent-title').textContent = name;
   document.getElementById('agent-summary').textContent = plural(d.bookings, 'booking') + ' · ' + plural(d.events, 'event') + ' created';
 
+  AGENT_MODAL = { name, items: d.bookingList.concat(d.eventList), day: null };
+  renderAgentLists();
+
+  const keys = AGENT_MODAL.items.filter(b => b.status !== 'removed').map(b => (b.booking_date || '').slice(0, 10)).filter(Boolean);
+  const nearest = nearestDayKey(keys, dateKey(NOW.getFullYear(), NOW.getMonth(), NOW.getDate()));
+  agentCalendar.populateSelects();
+  if (nearest) agentCalendar.goToDay(nearest); else agentCalendar.goToday();
+
+  document.querySelector('#agent-modal .modal-body').scrollTop = 0;
+  document.getElementById('agent-modal').classList.add('open');
+  document.body.style.overflow = 'hidden';
+}
+
+// Click a day on the small calendar to narrow the lists to it; click it again (or "Show all") to clear.
+function setAgentDay(key) {
+  AGENT_MODAL.day = AGENT_MODAL.day === key ? null : key;
+  renderAgentLists();
+  agentCalendar.render();
+}
+
+function clearAgentDay() {
+  if (AGENT_MODAL.day) setAgentDay(AGENT_MODAL.day);
+}
+
+function renderAgentLists() {
+  const day = AGENT_MODAL.day;
   const time = x => x ? new Date(x).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
   const bookingRow = b =>
     '<div class="log-entry"><div class="log-main">' +
@@ -1323,15 +1428,31 @@ function openAgentModal(name) {
   };
   const section = (title, rows, row) =>
     '<div class="am-section"><h3>' + title + ' (' + rows.length + ')</h3>' +
-    (rows.length ? rows.map(row).join('') : '<div class="am-empty">None</div>') + '</div>';
-  const byDate = key => (a, b) => (a[key] || '').localeCompare(b[key] || '');
+    (rows.length ? rows.map(row).join('') : '<div class="am-empty">' + (day ? 'None on this day' : 'None') + '</div>') + '</div>';
+  const pick = (isEvent, sortKey) => AGENT_MODAL.items
+    .filter(x => (x.kind === 'event') === isEvent && (!day || (x.booking_date || '').slice(0, 10) === day))
+    .sort((a, b) => (a[sortKey] || '').localeCompare(b[sortKey] || ''));
+
+  const bar = document.getElementById('agent-daybar');
+  if (day) {
+    const label = new Date(day + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+    const text = document.createElement('span');
+    text.textContent = 'Showing ' + label;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'am-clear';
+    btn.textContent = 'Show all';
+    btn.addEventListener('click', clearAgentDay);
+    bar.replaceChildren(text, btn);
+    bar.style.display = 'flex';
+  } else {
+    bar.replaceChildren();
+    bar.style.display = 'none';
+  }
 
   document.getElementById('agent-body').innerHTML =
-    section('Bookings', d.bookingList.slice().sort(byDate('booking_date')), bookingRow) +
-    section('Events created', d.eventList.slice().sort(byDate('date_from')), eventRow);
-
-  document.getElementById('agent-modal').classList.add('open');
-  document.body.style.overflow = 'hidden';
+    section('Bookings', pick(false, 'booking_date'), bookingRow) +
+    section('Events created', pick(true, 'date_from'), eventRow);
 }
 
 function closeAgentModal() {
@@ -1370,6 +1491,7 @@ function wireControls() {
 
   bookingCalendar.wire();
   salesDeptCalendar.wire();
+  agentCalendar.wire();
   wireChartTooltip();
   wireChartClicks();
 }
@@ -1552,20 +1674,5 @@ load();
   </div>
 </div>
 
-<div id="agent-modal" class="modal-overlay" onclick="if(event.target===this)closeAgentModal()">
-  <div class="modal">
-    <div class="modal-head">
-      <div class="modal-title-wrap">
-        <div class="eyebrow">Agent</div>
-        <h2 id="agent-title"></h2>
-        <div class="log-time" id="agent-summary"></div>
-      </div>
-      <button class="modal-close" onclick="closeAgentModal()" aria-label="Close">&times;</button>
-    </div>
-    <div class="modal-body">
-      <div id="agent-body"></div>
-    </div>
-  </div>
-</div>
 </body>
 </html>
