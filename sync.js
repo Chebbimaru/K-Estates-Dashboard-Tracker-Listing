@@ -7,6 +7,7 @@ const {
   markCalendarEventRemoved,
   getActiveCalendarEventIds,
   replaceSalesDeptAgents,
+  getCalendarEvents,
 } = require('./db');
 
 const WEBHOOK = process.env.WEBHOOK || 'https://kestates.bitrix24.com/rest/25113/j10najl3oflt3b4p/';
@@ -133,6 +134,17 @@ function isCreatedByOwner(agent, ev) {
   return ev.MEETING_STATUS === 'H';
 }
 
+// Events bound to several leads keep only the first lead.
+function leadIdFromEvent(ev) {
+  const raw = ev.UF_CRM_CAL_EVENT;
+  const bindings = Array.isArray(raw) ? raw : (raw ? [raw] : []);
+  for (const b of bindings) {
+    const m = /^L_(\d+)$/.exec(String(b));
+    if (m) return m[1];
+  }
+  return '';
+}
+
 function toCalendarEventRow(agent, ev) {
   const eventId = agent.id + ':' + String(ev.ID);
   const fromTs = Number(ev.DATE_FROM_TS_UTC);
@@ -155,7 +167,50 @@ function toCalendarEventRow(agent, ev) {
     location: String(ev.LOCATION || ''),
     is_recurring: isRecurring ? 1 : 0,
     created_by_owner: isCreatedByOwner(agent, ev) ? 1 : 0,
+    lead_id: leadIdFromEvent(ev),
+    lead_title: '',
+    lead_client: '',
+    lead_phone: '',
   };
+}
+
+async function fetchLeads(ids) {
+  const unique = [...new Set(ids.map(String).filter(Boolean))];
+  const leads = {};
+  for (let i = 0; i < unique.length; i += 50) {
+    const chunk = unique.slice(i, i + 50);
+    const res = await callApi('crm.lead.list', {
+      filter: { ID: chunk },
+      select: ['ID', 'TITLE', 'NAME', 'LAST_NAME', 'PHONE'],
+    });
+    for (const l of res.result || []) {
+      leads[String(l.ID)] = {
+        title: l.TITLE || '',
+        client: [l.NAME, l.LAST_NAME].filter(Boolean).join(' ').trim(),
+        phone: (l.PHONE && l.PHONE[0] && l.PHONE[0].VALUE) || '',
+      };
+    }
+  }
+  return leads;
+}
+
+// Fill lead details from the fresh fetch, else from what is already stored, else blank,
+// so a failed/partial fetch or a deleted lead never overwrites good stored details.
+function applyLeadDetails(events, leadsById, storedRows) {
+  for (const ev of Object.values(events)) {
+    if (!ev.lead_id) continue;
+    const fresh = leadsById[ev.lead_id];
+    const stored = fresh ? null : storedRows.find(r => r.lead_id === ev.lead_id && (r.lead_title || r.lead_client));
+    const src = fresh
+      ? { title: fresh.title, client: fresh.client, phone: fresh.phone }
+      : stored
+        ? { title: stored.lead_title, client: stored.lead_client, phone: stored.lead_phone }
+        : { title: '', client: '', phone: '' };
+    ev.lead_title = src.title || '';
+    ev.lead_client = src.client || '';
+    ev.lead_phone = src.phone || '';
+  }
+  return events;
 }
 
 async function buildCalendarEvents() {
@@ -182,6 +237,19 @@ async function buildCalendarEvents() {
       }
     }
   }
+
+  const leadIds = [...new Set(Object.values(events).map(e => e.lead_id).filter(Boolean))];
+  let leadsById = {};
+  if (leadIds.length) {
+    try {
+      leadsById = await fetchLeads(leadIds);
+    } catch (err) {
+      console.warn(`  [calendar] lead details unavailable, keeping stored ones: ${err.message}`);
+    }
+  }
+  applyLeadDetails(events, leadsById, getCalendarEvents());
+  const leadBound = Object.values(events).filter(e => e.lead_id).length;
+  console.log(`[sync] Lead-bound events: ${leadBound} (${leadIds.length} distinct leads)`);
   return { roster, events, incompleteOwners };
 }
 
@@ -310,4 +378,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { sync, reconcileRemovedCalendarEvents, toCalendarEventRow, isScheduleEvent, isCreatedByOwner, applyCalendarUpdate };
+module.exports = { sync, reconcileRemovedCalendarEvents, toCalendarEventRow, leadIdFromEvent, applyLeadDetails, isScheduleEvent, isCreatedByOwner, applyCalendarUpdate };

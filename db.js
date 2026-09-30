@@ -73,6 +73,10 @@ db.exec(`
     location TEXT,
     is_recurring INTEGER NOT NULL DEFAULT 0,
     created_by_owner INTEGER NOT NULL DEFAULT 0,
+    lead_id TEXT NOT NULL DEFAULT '',
+    lead_title TEXT NOT NULL DEFAULT '',
+    lead_client TEXT NOT NULL DEFAULT '',
+    lead_phone TEXT NOT NULL DEFAULT '',
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active'
@@ -101,6 +105,15 @@ const hasCreatedByOwnerColumn = db.prepare(`PRAGMA table_info(calendar_events)`)
   .some(col => col.name === 'created_by_owner');
 if (!hasCreatedByOwnerColumn) {
   db.exec(`ALTER TABLE calendar_events ADD COLUMN created_by_owner INTEGER NOT NULL DEFAULT 0`);
+}
+
+// Additive migration for DBs created before calendar_events carried CRM lead details
+// (lead_id is the Bitrix lead the event is bound to; title/client/phone are filled in by sync).
+const calendarColumns = db.prepare(`PRAGMA table_info(calendar_events)`).all().map(col => col.name);
+for (const col of ['lead_id', 'lead_title', 'lead_client', 'lead_phone']) {
+  if (!calendarColumns.includes(col)) {
+    db.exec(`ALTER TABLE calendar_events ADD COLUMN ${col} TEXT NOT NULL DEFAULT ''`);
+  }
 }
 
 // Seed the admin credential row from the hardcoded defaults on first run,
@@ -180,9 +193,11 @@ const UPSERT_CREDENTIALS = db.prepare(`
 
 const INSERT_CALENDAR_EVENT = db.prepare(`
   INSERT INTO calendar_events
-    (event_id, owner_id, owner_name, name, date_from, date_to, all_day, location, is_recurring, created_by_owner, created_at, updated_at, status)
+    (event_id, owner_id, owner_name, name, date_from, date_to, all_day, location, is_recurring, created_by_owner,
+     lead_id, lead_title, lead_client, lead_phone, created_at, updated_at, status)
   VALUES
-    (@event_id, @owner_id, @owner_name, @name, @date_from, @date_to, @all_day, @location, @is_recurring, @created_by_owner, @created_at, @updated_at, @status)
+    (@event_id, @owner_id, @owner_name, @name, @date_from, @date_to, @all_day, @location, @is_recurring, @created_by_owner,
+     @lead_id, @lead_title, @lead_client, @lead_phone, @created_at, @updated_at, @status)
 `);
 
 const GET_CALENDAR_EVENT = db.prepare(`SELECT * FROM calendar_events WHERE event_id = ?`);
@@ -192,6 +207,7 @@ const UPDATE_CALENDAR_EVENT = db.prepare(`
     owner_id = @owner_id, owner_name = @owner_name, name = @name,
     date_from = @date_from, date_to = @date_to, all_day = @all_day,
     location = @location, is_recurring = @is_recurring, created_by_owner = @created_by_owner,
+    lead_id = @lead_id, lead_title = @lead_title, lead_client = @lead_client, lead_phone = @lead_phone,
     updated_at = @updated_at, status = @status
   WHERE event_id = @event_id
 `);
@@ -309,7 +325,8 @@ function upsertCalendarEvent(ev, now) {
     return { firstSeen: true, status: 'created' };
   }
 
-  const fields = ['owner_id', 'owner_name', 'name', 'date_from', 'date_to', 'all_day', 'location', 'is_recurring', 'created_by_owner'];
+  const fields = ['owner_id', 'owner_name', 'name', 'date_from', 'date_to', 'all_day', 'location', 'is_recurring', 'created_by_owner',
+                  'lead_id', 'lead_title', 'lead_client', 'lead_phone'];
   const changed = fields.filter(f => (existing[f] || '') !== (ev[f] || ''));
   const wasRemoved = existing.status === 'removed';
 

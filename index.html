@@ -123,13 +123,17 @@
 
   .controls { display: flex; flex-wrap: wrap; gap: 26px; align-items: flex-end; margin-bottom: 30px; }
   .controls label { display: block; font-size: 9px; letter-spacing: .28em; text-transform: uppercase; color: var(--muted); margin-bottom: 7px; font-weight: 600; }
-  .controls select, .controls input[type=text] {
+  .controls select, .controls input[type=text], .controls input[type=date] {
     padding: 10px 14px 10px 0; border: none; border-bottom: 1px solid var(--control-line); background: transparent;
     font-family: 'Montserrat', sans-serif; font-size: 13px; font-weight: 500; color: var(--ink); outline: none;
     transition: border-color .25s ease; border-radius: 0;
   }
   .controls select { min-width: 160px; }
-  .controls select:focus, .controls input[type=text]:focus { border-bottom-color: var(--gold); }
+  .controls select:focus, .controls input[type=text]:focus, .controls input[type=date]:focus { border-bottom-color: var(--gold); }
+  .controls input[type=date] { min-width: 140px; }
+  .period-range { display: flex; gap: 26px; align-items: flex-end; }
+  :root[data-theme=dark] .controls input[type=date] { color-scheme: dark; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme=light]) .controls input[type=date] { color-scheme: dark; } }
   .search-box { flex: 1 1 240px; max-width: 360px; }
 
   .panel { display: none; animation: fadeIn .4s ease; }
@@ -210,6 +214,7 @@
   .badge { display: inline-block; padding: 4px 12px; font-size: 9px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
   .badge.sale { background: #1E9E54; color: #fff; }
   .badge.rent { background: #F0830A; color: #fff; }
+  .badge.lead { background: var(--gold); color: #fff; }
   .badge-st { display: inline-block; padding: 4px 12px; font-size: 9px; font-weight: 700; letter-spacing: .18em; text-transform: uppercase; }
   .badge-st.active { background: var(--gold); color: #fff; }
   .badge-st.removed { background: var(--removed-bg); color: #fff; }
@@ -480,7 +485,19 @@
         <option value="7">Last 7 days</option>
         <option value="30">Last 30 days</option>
         <option value="90">Last 90 days</option>
+        <option value="year" selected>This year</option>
+        <option value="custom">Custom range&hellip;</option>
       </select>
+    </div>
+    <div id="period-range" class="period-range" style="display:none">
+      <div>
+        <label for="period-from">From</label>
+        <input type="date" id="period-from">
+      </div>
+      <div>
+        <label for="period-to">To</label>
+        <input type="date" id="period-to">
+      </div>
     </div>
     <div>
       <label>Agent</label>
@@ -517,7 +534,7 @@
       </div>
       <div class="card">
         <h2>Bookings by Agent</h2>
-        <div class="hint">Viewing bookings plus the events each active Sales Department agent created in their own calendar, for the selected filters. Hover a column for the split; click one to open that agent's calendar.</div>
+        <div class="hint">Viewing bookings (including calendar events bound to a CRM lead) plus the other events each active Sales Department agent created in their own calendar, for the selected filters. Hover a column for the split; click one to see that agent's bookings and events.</div>
         <div class="bc-legend"><span><i class="bc-key bc-key-b"></i>Bookings</span><span><i class="bc-key bc-key-e"></i>Events created</span></div>
         <div id="bookings-chart"></div>
         <div id="chart-empty" class="empty" style="display:none">No bookings match the selected filters.</div>
@@ -639,7 +656,7 @@ const ENTITY_TYPE_ID = 1032;         // Property Inventory SPA (for CRM detail l
 
 const NOW = new Date();
 const state = {
-  period: 'all', agent: 'all', type: 'all', search: '', status: 'all',
+  period: 'year', dateFrom: '', dateTo: '', agent: 'all', type: 'all', search: '', status: 'all',
   calAgent: 'all', calType: 'all', sdAgent: 'all',
 };
 let DATA = null; // { bookings: [...], summary: [...], events: [...], meta: {...} }
@@ -708,6 +725,10 @@ async function loadSalesCalendarData() {
     all_day: !!ev.all_day,
     is_recurring: !!ev.is_recurring,
     created_by_owner: !!ev.created_by_owner,
+    lead_id: ev.lead_id || '',
+    lead_title: ev.lead_title || '',
+    lead_client: ev.lead_client || '',
+    lead_phone: ev.lead_phone || '',
     location: ev.location || '',
     listing: ev.name || '',
     client_name: '',
@@ -745,6 +766,17 @@ function inPeriod(dateStr, period) {
     return d.getFullYear() === target.getFullYear() &&
       d.getMonth() === target.getMonth() &&
       d.getDate() === target.getDate();
+  }
+  if (period === 'year') return d.getFullYear() === NOW.getFullYear();
+  if (period === 'custom') {
+    let from = state.dateFrom ? new Date(state.dateFrom + 'T00:00:00') : null;
+    let to = state.dateTo ? new Date(state.dateTo + 'T23:59:59.999') : null;
+    if (from && to && from > to) {   // reversed range: swap the days instead of matching nothing
+      const a = new Date(state.dateTo + 'T00:00:00');
+      const b = new Date(state.dateFrom + 'T23:59:59.999');
+      from = a; to = b;
+    }
+    return (!from || d >= from) && (!to || d <= to);
   }
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - parseInt(period, 10));
@@ -899,13 +931,26 @@ function renderBookingsTable(entries) {
 }
 
 // Columns = every active Sales Department agent from the CRM roster (0 included).
-// Bookings: CRM viewing bookings under the current filters, matched by agent name.
-// Events created: calendar events the agent hosts in their own calendar, respecting Period, Search
-// and the Agent filter (Type/Status are booking-only concepts, so they don't apply to events).
+// Bookings: CRM viewing bookings under the current filters, matched by agent name, plus calendar events the
+// agent created that are bound to a CRM lead (a lead-bound event is a booking, not a generic event).
+// Events created: the other calendar events the agent hosts in their own calendar.
+// Events (both kinds) respect Period, Search and the Agent filter; Type/Status are booking-only concepts.
 // Agent name -> chart entry (with bookingList / eventList) from the latest render; read by the bar-click modal.
 let AGENT_DETAIL = {};
 // The agent shown in the bar-click modal: bookings + created events for its calendar, and the selected day filter.
 let AGENT_MODAL = { name: null, items: [], day: null };
+
+// A lead-bound calendar event shown as a booking: the client is the lead, there is no Sale/Rent.
+function leadBookingItem(ev) {
+  return {
+    kind: 'lead', lead_id: ev.lead_id,
+    booking_date: ev.booking_date, date_from: ev.date_from, date_to: ev.date_to,
+    all_day: ev.all_day, is_recurring: ev.is_recurring,
+    client_name: ev.lead_client || 'Lead #' + ev.lead_id, client_phone: ev.lead_phone,
+    listing: ev.lead_title, address: ev.lead_title, pipeline: '',
+    responsible: ev.responsible, sale_rent: '', status: 'active',
+  };
+}
 
 function renderChart(bookings) {
   const el = document.getElementById('bookings-chart');
@@ -922,14 +967,18 @@ function renderChart(bookings) {
   const bookingLists = {};
   bookings.forEach(b => { (bookingLists[b.responsible] = bookingLists[b.responsible] || []).push(b); });
   const createdEvents = {};
+  const leadBookings = {};
   (SALES_CALENDAR ? SALES_CALENDAR.events : []).forEach(ev => {
-    if (!ev.created_by_owner || !matchesPeriodAndSearch(ev)) return;
+    if (!ev.created_by_owner) return;
+    const item = ev.lead_id ? leadBookingItem(ev) : ev;
+    if (!matchesPeriodAndSearch(item)) return;
     if (state.agent !== 'all' && ev.responsible !== state.agent) return;
-    (createdEvents[ev.responsible] = createdEvents[ev.responsible] || []).push(ev);
+    const bucket = ev.lead_id ? leadBookings : createdEvents;
+    (bucket[ev.responsible] = bucket[ev.responsible] || []).push(item);
   });
   const entries = roster.map(a => {
     const eventList = createdEvents[a.name] || [];
-    const bookingList = bookingLists[a.name] || [];
+    const bookingList = (bookingLists[a.name] || []).concat(leadBookings[a.name] || []);
     const b = bookingList.length;
     return { name: a.name, bookings: b, events: eventList.length, n: b + eventList.length, eventList, bookingList };
   }).sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
@@ -1000,6 +1049,13 @@ function crmLink(b) {
   if (!id) return '<span class="muted-char">' + text + '</span>';
   const url = 'https://kestates.bitrix24.com/crm/type/' + ENTITY_TYPE_ID + '/details/' + encodeURIComponent(id) + '/';
   return '<a href="' + url + '" target="_blank" rel="noopener" class="crm-link" title="Open ' + esc(label) + ' in CRM">' + text + '</a>';
+}
+
+function leadLink(b) {
+  const label = b.listing || 'Open lead in CRM';
+  const text = label.length > 30 ? esc(label.slice(0, 30)) + '&hellip;' : esc(label);
+  const url = 'https://kestates.bitrix24.com/crm/lead/details/' + encodeURIComponent(b.lead_id) + '/';
+  return '<a href="' + url + '" target="_blank" rel="noopener" class="crm-link" title="Open lead ' + esc(b.lead_id) + ' in CRM">' + text + '</a>';
 }
 
 const STATUS_LABELS = { active: 'Active', removed: 'Removed' };
@@ -1417,9 +1473,16 @@ function renderAgentLists() {
       '<div class="log-time">' + esc(fmtDate(b.booking_date)) + ' &middot; ' + cellText(b.address) + '</div>' +
       '<div class="log-time">' + crmLink(b) + '</div>' +
     '</div></div>';
+  const whenText = ev => fmtDate(ev.date_from).split(' · ')[0] + ' · ' +
+    (ev.all_day ? 'All day' : [time(ev.date_from), time(ev.date_to)].filter(Boolean).join(' – '));
+  const leadRow = b =>
+    '<div class="log-entry"><div class="log-main">' +
+      '<div class="log-detail">' + cellText(b.client_name) + ' &middot; <span class="badge lead">Lead</span></div>' +
+      '<div class="log-time">' + esc(whenText(b)) + (b.client_phone ? ' &middot; ' + esc(b.client_phone) : '') + '</div>' +
+      '<div class="log-time">' + leadLink(b) + '</div>' +
+    '</div></div>';
   const eventRow = ev => {
-    const when = fmtDate(ev.date_from).split(' · ')[0] + ' · ' +
-      (ev.all_day ? 'All day' : [time(ev.date_from), time(ev.date_to)].filter(Boolean).join(' – '));
+    const when = whenText(ev);
     return '<div class="log-entry"><div class="log-main">' +
       '<div class="log-detail">' + cellText(ev.listing) + '</div>' +
       '<div class="log-time">' + esc(when) + (ev.is_recurring ? ' &middot; recurring' : '') +
@@ -1451,7 +1514,7 @@ function renderAgentLists() {
   }
 
   document.getElementById('agent-body').innerHTML =
-    section('Bookings', pick(false, 'booking_date'), bookingRow) +
+    section('Bookings', pick(false, 'booking_date'), b => b.kind === 'lead' ? leadRow(b) : bookingRow(b)) +
     section('Events created', pick(true, 'date_from'), eventRow);
 }
 
@@ -1479,7 +1542,13 @@ function wireControls() {
   document.querySelectorAll('.tab').forEach(t => {
     t.addEventListener('click', () => activateTab(t.dataset.panel));
   });
-  document.getElementById('period').addEventListener('change', e => { state.period = e.target.value; renderAll(); });
+  document.getElementById('period').addEventListener('change', e => {
+    state.period = e.target.value;
+    document.getElementById('period-range').style.display = state.period === 'custom' ? 'flex' : 'none';
+    renderAll();
+  });
+  document.getElementById('period-from').addEventListener('change', e => { state.dateFrom = e.target.value; renderAll(); });
+  document.getElementById('period-to').addEventListener('change', e => { state.dateTo = e.target.value; renderAll(); });
   document.getElementById('agent-filter').addEventListener('change', e => { state.agent = e.target.value; renderAll(); });
   document.getElementById('type-filter').addEventListener('change', e => { state.type = e.target.value; renderAll(); });
   document.getElementById('status-filter').addEventListener('change', e => { state.status = e.target.value; renderAll(); });
