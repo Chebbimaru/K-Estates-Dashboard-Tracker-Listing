@@ -19,6 +19,7 @@
     --gold-soft: #E2D3AE;
     --series-bookings: #2a78d6;
     --series-events: #eda100;
+    --series-briefings: #149a74;
     --removed-bg: #1B1B1B;
     --control-line: #C9C2B2;
     --thead-line: #C9C2B2;
@@ -37,6 +38,7 @@
     --gold-soft: #6B5A2E;
     --series-bookings: #3987e5;
     --series-events: #c98500;
+    --series-briefings: #26a883;
     --control-line: #4A463C;
     --thead-line: #4A463C;
     --modal-bg: #161511;
@@ -55,6 +57,7 @@
       --gold-soft: #6B5A2E;
       --series-bookings: #3987e5;
       --series-events: #c98500;
+      --series-briefings: #26a883;
       --control-line: #4A463C;
       --thead-line: #4A463C;
       --modal-bg: #161511;
@@ -132,6 +135,8 @@
   .controls select:focus, .controls input[type=text]:focus, .controls input[type=date]:focus { border-bottom-color: var(--gold); }
   .controls input[type=date] { min-width: 140px; }
   .period-range { display: flex; gap: 26px; align-items: flex-end; }
+  .filter-note { flex: 0 0 100%; margin-top: -10px; font-size: 11px; color: var(--muted); }
+  .tab-hidden { display: none !important; }
   :root[data-theme=dark] .controls input[type=date] { color-scheme: dark; }
   @media (prefers-color-scheme: dark) { :root:not([data-theme=light]) .controls input[type=date] { color-scheme: dark; } }
   .search-box { flex: 1 1 240px; max-width: 360px; }
@@ -151,6 +156,9 @@
   .stat .num { font-size: 36px; font-weight: 200; line-height: 1; font-variant-numeric: tabular-nums; letter-spacing: .02em; }
   .stat .num.sale { color: #1E9E54; }
   .stat .num.rent { color: #F0830A; }
+  .stat .num.bk { color: var(--series-bookings); }
+  .stat .num.ev { color: var(--series-events); }
+  .stat .num.br { color: var(--series-briefings); }
   .stat .num.all { color: var(--ink); }
   .stat .rule { position: absolute; top: 8px; left: 24px; right: 24px; height: 1px; background: var(--gold-soft); opacity: 0; transition: opacity .3s ease; }
 
@@ -173,6 +181,7 @@
   .bc-seg { transform-box: fill-box; transform-origin: 50% 100%; transition: filter .2s ease; animation: bc-grow .6s cubic-bezier(.22,.61,.36,1) both; }
   .bc-seg-b { fill: var(--series-bookings); }
   .bc-seg-e { fill: var(--series-events); }
+  .bc-seg-r { fill: var(--series-briefings); }
   .bc-col:hover .bc-seg, .bc-col:focus .bc-seg { filter: brightness(1.15); }
   .bc-col:hover .bc-name, .bc-col:focus .bc-name { fill: var(--ink); }
   .bc-col:focus-visible .bc-hit { stroke: var(--gold); stroke-width: 1; }
@@ -190,11 +199,14 @@
   .bc-tip-row b { font-weight: 700; font-variant-numeric: tabular-nums; }
   .bc-tip-name { display: block; margin-top: 6px; }
   .bc-key-line { display: inline-block; width: 12px; height: 3px; border-radius: 2px; margin-right: 8px; vertical-align: middle; }
-  .bc-legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 0 0 12px; font-size: 12px; color: var(--muted); }
-  .bc-legend span { display: inline-flex; align-items: center; gap: 8px; }
+  .bc-legend { display: flex; flex-wrap: wrap; gap: 8px 22px; margin: 16px 0 12px; font-size: 12px; color: var(--muted); }
+  .bc-legend-item { display: inline-flex; align-items: center; gap: 8px; background: none; border: 0; padding: 2px 4px; margin: -2px -4px; border-radius: 4px; font: inherit; color: inherit; cursor: pointer; }
+  .bc-legend-item:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+  .bc-legend-item[aria-pressed="false"] { opacity: .45; text-decoration: line-through; }
   .bc-key { display: inline-block; width: 12px; height: 12px; border-radius: 2px; }
   .bc-key-b { background: var(--series-bookings); }
   .bc-key-e { background: var(--series-events); }
+  .bc-key-r { background: var(--series-briefings); }
   .chart-details { margin-top: 14px; }
   .chart-details summary { cursor: pointer; color: var(--muted); font-size: 10px; font-weight: 600; letter-spacing: .2em; text-transform: uppercase; }
   .chart-details table { margin-top: 12px; }
@@ -290,6 +302,7 @@
   .am-cal .cal-dots { top: 5px; right: 5px; gap: 3px; }
   .cal-dot.bk { background: var(--series-bookings); }
   .cal-dot.ev { background: var(--series-events); }
+  .cal-dot.br { background: var(--series-briefings); }
   .cal-cell.selected { border-color: var(--gold); background: var(--gold-soft); }
   .am-legend { display: flex; gap: 16px; justify-content: center; margin-top: 12px; font-size: 10px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
   .am-legend span { display: inline-flex; align-items: center; gap: 6px; }
@@ -454,6 +467,7 @@
           <div class="am-legend">
             <span><i class="cal-dot bk"></i>Booking</span>
             <span><i class="cal-dot ev"></i>Event created</span>
+            <span><i class="cal-dot br"></i>Briefing</span>
           </div>
         </aside>
       </div>
@@ -475,21 +489,22 @@
   </div>
 
   <div class="controls">
-    <div>
+    <div data-panels="panel-bookings panel-sales-dept panel-listings">
       <label>Period</label>
       <select id="period">
         <option value="all">All time</option>
-        <option value="yesterday">Yesterday</option>
         <option value="today">Today</option>
-        <option value="tomorrow">Tomorrow</option>
-        <option value="7">Last 7 days</option>
-        <option value="30">Last 30 days</option>
-        <option value="90">Last 90 days</option>
+        <option value="week">This week</option>
+        <option value="lastweek">Last week</option>
+        <option value="month">This month</option>
+        <option value="lastmonth">Last month</option>
+        <option value="quarter">This quarter</option>
+        <option value="lastquarter">Last quarter</option>
         <option value="year" selected>This year</option>
         <option value="custom">Custom range&hellip;</option>
       </select>
     </div>
-    <div id="period-range" class="period-range" style="display:none">
+    <div id="period-range" class="period-range" data-panels="panel-bookings panel-sales-dept panel-listings" style="display:none">
       <div>
         <label for="period-from">From</label>
         <input type="date" id="period-from">
@@ -499,27 +514,38 @@
         <input type="date" id="period-to">
       </div>
     </div>
-    <div>
+    <div data-panels="panel-bookings panel-listings">
       <label>Agent</label>
       <select id="agent-filter"><option value="all">All agents</option></select>
     </div>
-    <div>
-      <label>Type</label>
+    <div data-panels="panel-bookings" title="Applies to the Bookings by Agent chart, tiles, table and agent window">
+      <label>Show</label>
+      <select id="show-filter">
+        <option value="all">Bookings + events + briefings</option>
+        <option value="bookings">Bookings only</option>
+        <option value="events">Events created only</option>
+        <option value="briefings">Briefings only</option>
+        <option value="custom" disabled hidden>Custom (from legend)</option>
+      </select>
+    </div>
+    <div data-panels="panel-bookings panel-listings" title="Applies to CRM viewing bookings only">
+      <label>Booking type</label>
       <select id="type-filter">
         <option value="all">All</option>
         <option value="Sale">Sale</option>
         <option value="Rent">Rent</option>
       </select>
     </div>
-    <div>
-      <label>Status</label>
+    <div data-panels="panel-bookings panel-listings" title="Applies to CRM viewing bookings only">
+      <label>Booking status</label>
       <select id="status-filter">
         <option value="all">All statuses</option>
         <option value="active">Active</option>
         <option value="removed">Removed</option>
       </select>
     </div>
-    <input type="text" id="search" class="search-box" placeholder="Search client, address, agent...">
+    <input type="text" id="search" class="search-box" data-panels="panel-bookings panel-sales-dept panel-listings" placeholder="Search client, phone, listing, event, agent...">
+    <div class="filter-note" data-panels="panel-bookings">Booking type and status apply to CRM viewing bookings only; Period, Agent and Search apply to bookings, events and briefings.</div>
   </div>
 
   <div id="loading" class="loading"><div class="spinner"></div><span>Loading bookings from database</span></div>
@@ -527,21 +553,24 @@
   <div id="content" style="display:none">
     <div id="panel-bookings" class="panel active">
       <div class="stat-row">
-        <div class="stat"><div class="lbl">Total bookings</div><div class="num all" id="stat-total">0</div></div>
-        <div class="stat"><div class="lbl">Sale bookings</div><div class="num sale" id="stat-sale">0</div></div>
-        <div class="stat"><div class="lbl">Rental bookings</div><div class="num rent" id="stat-rent">0</div></div>
+        <div class="stat" title="Bookings + events created (briefings not included)"><div class="lbl">Total</div><div class="num all" id="stat-total">0</div></div>
+        <div class="stat"><div class="lbl">Bookings</div><div class="num bk" id="stat-bookings">0</div></div>
+        <div class="stat"><div class="lbl">Events created</div><div class="num ev" id="stat-events">0</div></div>
+        <div class="stat" title="Distinct briefings, each counted once; every active agent is shown with each of them"><div class="lbl">Briefings</div><div class="num br" id="stat-briefings">0</div></div>
         <div class="stat"><div class="lbl">Active agents</div><div class="num all" id="stat-agents">0</div></div>
       </div>
       <div class="card">
         <h2>Bookings by Agent</h2>
-        <div class="hint">Viewing bookings (including calendar events bound to a CRM lead) plus the other events each active Sales Department agent created in their own calendar, for the selected filters. Hover a column for the split; click one to see that agent's bookings and events.</div>
-        <div class="bc-legend"><span><i class="bc-key bc-key-b"></i>Bookings</span><span><i class="bc-key bc-key-e"></i>Events created</span></div>
+        <div class="bc-legend"><button type="button" class="bc-legend-item" data-kind="bookings" aria-pressed="true"><i class="bc-key bc-key-b"></i>Bookings</button><button type="button" class="bc-legend-item" data-kind="events" aria-pressed="true"><i class="bc-key bc-key-e"></i>Events created</button><button type="button" class="bc-legend-item" data-kind="briefings" aria-pressed="true"><i class="bc-key bc-key-r"></i>Briefings</button></div>
         <div id="bookings-chart"></div>
-        <div id="chart-empty" class="empty" style="display:none">No bookings match the selected filters.</div>
+        <div id="chart-empty" class="empty" style="display:none">No bookings, events or briefings match the selected filters.</div>
         <details class="chart-details"><summary>View as table</summary><div id="bookings-table"></div></details>
       </div>
+    </div>
+
+    <div id="panel-sales-dept" class="panel">
       <div class="card">
-        <h2>Booking Calendar Lead</h2>
+        <h2>Booking Calendar Listing</h2>
         <div class="hint">Bookings by day for the selected filters. Click a day to see its bookings.</div>
         <div class="controls cal-controls">
           <div>
@@ -569,11 +598,8 @@
         </div>
         <div class="cal-grid" id="cal-grid"></div>
       </div>
-    </div>
-
-    <div id="panel-sales-dept" class="panel">
       <div class="card">
-        <h2>Sales Department Calendar</h2>
+        <h2>Booking Calendar Lead</h2>
         <div class="hint">Real Bitrix24 calendar schedule for active agents in the Sales Department.</div>
         <div class="controls cal-controls">
           <div>
@@ -650,7 +676,7 @@
   <div class="gen" id="generated"></div>
 </div>
 
-<script src="/login.js"></script>
+<script src="login.js"></script>
 <script>
 const ENTITY_TYPE_ID = 1032;         // Property Inventory SPA (for CRM detail links)
 
@@ -659,6 +685,12 @@ const state = {
   period: 'year', dateFrom: '', dateTo: '', agent: 'all', type: 'all', search: '', status: 'all',
   calAgent: 'all', calType: 'all', sdAgent: 'all',
 };
+// Which Bookings by Agent series are shown (legend toggles + Show dropdown); drives the whole Bookings tab.
+state.kinds = { bookings: true, events: true, briefings: true };
+const showKind = k => state.kinds[k];
+// Agents hidden everywhere in the dashboard (client side only; their data stays in the DB).
+// Remove an entry to show that agent again. ids match the roster/event owner id, names match a booking's Responsible.
+const HIDDEN_AGENTS = { ids: ['26489'], names: ['Shayan Ahmadzadeh'] };
 let DATA = null; // { bookings: [...], summary: [...], events: [...], meta: {...} }
 let SALES_CALENDAR = null; // { agents: [{id,name}], events: [...normalized event bookings] }
 
@@ -675,9 +707,9 @@ async function apiGet(url) {
 
 // Loads booking history + status from the Node/SQLite backend (server.js)
 async function loadData() {
-  const payload = await apiGet('/api/status');
+  const payload = await apiGet('api/status');
 
-  const bookings = (payload.bookings || []).map(b => ({
+  const bookings = (payload.bookings || []).filter(b => !HIDDEN_AGENTS.names.includes(b.responsible)).map(b => ({
     booking_date: (b.created_at || '').slice(0, 16),
     created_at: b.created_at || '',
     updated_at: b.updated_at || '',
@@ -707,7 +739,7 @@ async function loadData() {
 
 // Loads the Sales Department's real Bitrix24 calendar schedule (roster + events)
 async function loadSalesCalendarData() {
-  const payload = await apiGet('/api/sales-calendar');
+  const payload = await apiGet('api/sales-calendar');
   // date_from is a UTC ISO string; derive a zone-less LOCAL 'YYYY-MM-DDTHH:mm' so the
   // calendar day key, inPeriod(), and the modal's local times all agree.
   const localStamp = iso => {
@@ -717,7 +749,13 @@ async function loadSalesCalendarData() {
     return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()) +
       'T' + p(d.getHours()) + ':' + p(d.getMinutes());
   };
-  const events = (payload.events || []).map(ev => ({
+  const parseOccurrences = raw => {
+    let list = [];
+    try { list = JSON.parse(raw || '[]'); } catch (e) { list = []; }
+    return (Array.isArray(list) ? list : []).map(iso => ({ iso, stamp: localStamp(iso) })).filter(o => o.stamp)
+      .sort((a, b) => a.stamp.localeCompare(b.stamp));
+  };
+  const events = (payload.events || []).filter(ev => !HIDDEN_AGENTS.ids.includes(String(ev.owner_id))).map(ev => ({
     kind: 'event',
     booking_date: localStamp(ev.date_from),
     date_from: ev.date_from || '',
@@ -725,6 +763,9 @@ async function loadSalesCalendarData() {
     all_day: !!ev.all_day,
     is_recurring: !!ev.is_recurring,
     created_by_owner: !!ev.created_by_owner,
+    is_briefing: !!ev.is_briefing,
+    // Recurring series only: every occurrence start as { iso, stamp } (stamp = local 'YYYY-MM-DDTHH:mm'), sorted.
+    occurrences: parseOccurrences(ev.occurrences),
     lead_id: ev.lead_id || '',
     lead_title: ev.lead_title || '',
     lead_client: ev.lead_client || '',
@@ -740,67 +781,131 @@ async function loadSalesCalendarData() {
     status: 'active',
   }));
   return {
-    agents: payload.agents || [],
+    agents: (payload.agents || []).filter(a => !HIDDEN_AGENTS.ids.includes(String(a.user_id))),
     events: events,
   };
 }
 
 // ---------- Rendering ----------
+// Shared formatters (building an Intl.DateTimeFormat per call is the expensive part of toLocale*String).
+const DF_DATE = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+const DF_TIME = new Intl.DateTimeFormat('en-GB', { hour: '2-digit', minute: '2-digit' });
+const DF_DAY_LONG = new Intl.DateTimeFormat('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' });
+const DF_DAY_SHORT = new Intl.DateTimeFormat('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+const fmtTime = x => { const d = new Date(x); return isNaN(d) ? 'Invalid Date' : DF_TIME.format(d); };
+
 const fmtDate = iso => {
   if (!iso) return '';
   const d = new Date(iso);
   if (isNaN(d)) return iso;
-  const date = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
-  const time = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  return date + ' · ' + time;
+  return DF_DATE.format(d) + ' · ' + DF_TIME.format(d);
 };
 
-function inPeriod(dateStr, period) {
+// Calendar-aligned [start, end) for the preset periods; weeks run Monday to Sunday.
+function periodRange(period) {
+  const n = new Date();
+  const day = new Date(n.getFullYear(), n.getMonth(), n.getDate());
+  const mondayOffset = (day.getDay() + 6) % 7;
+  const weekStart = new Date(day.getFullYear(), day.getMonth(), day.getDate() - mondayOffset);
+  const addDays = (x, k) => new Date(x.getFullYear(), x.getMonth(), x.getDate() + k);
+  const qStartMonth = Math.floor(n.getMonth() / 3) * 3;
+  switch (period) {
+    case 'today': return [day, addDays(day, 1)];
+    case 'week': return [weekStart, addDays(weekStart, 7)];
+    case 'lastweek': return [addDays(weekStart, -7), weekStart];
+    case 'month': return [new Date(n.getFullYear(), n.getMonth(), 1), new Date(n.getFullYear(), n.getMonth() + 1, 1)];
+    case 'lastmonth': return [new Date(n.getFullYear(), n.getMonth() - 1, 1), new Date(n.getFullYear(), n.getMonth(), 1)];
+    case 'quarter': return [new Date(n.getFullYear(), qStartMonth, 1), new Date(n.getFullYear(), qStartMonth + 3, 1)];
+    case 'lastquarter': return [new Date(n.getFullYear(), qStartMonth - 3, 1), new Date(n.getFullYear(), qStartMonth, 1)];
+  }
+  return null;
+}
+
+// Period bounds and the lower-cased search are computed once per render (renderAll resets this) instead of per item.
+let PCTX = null;
+function periodCtx() {
+  if (PCTX) return PCTX;
+  const period = state.period;
+  const ctx = { period, range: null, from: null, to: null, q: state.search ? state.search.toLowerCase() : '' };
+  if (period !== 'all') {
+    ctx.range = periodRange(period);
+    if (!ctx.range && period === 'custom') {
+      let from = state.dateFrom ? new Date(state.dateFrom + 'T00:00:00') : null;
+      let to = state.dateTo ? new Date(state.dateTo + 'T23:59:59.999') : null;
+      if (from && to && from > to) {   // reversed range: swap the days instead of matching nothing
+        const a = new Date(state.dateTo + 'T00:00:00');
+        const b = new Date(state.dateFrom + 'T23:59:59.999');
+        from = a; to = b;
+      }
+      ctx.from = from; ctx.to = to;
+    }
+  }
+  return (PCTX = ctx);
+}
+
+function inPeriod(dateStr) {
+  const ctx = periodCtx();
+  const period = ctx.period;
   if (period === 'all') return true;
   const d = new Date(dateStr);
   if (isNaN(d)) return false;
-  if (period === 'today' || period === 'tomorrow' || period === 'yesterday') {
-    const target = new Date();
-    if (period === 'tomorrow') target.setDate(target.getDate() + 1);
-    if (period === 'yesterday') target.setDate(target.getDate() - 1);
-    return d.getFullYear() === target.getFullYear() &&
-      d.getMonth() === target.getMonth() &&
-      d.getDate() === target.getDate();
-  }
+  if (ctx.range) return d >= ctx.range[0] && d < ctx.range[1];
   if (period === 'year') return d.getFullYear() === NOW.getFullYear();
-  if (period === 'custom') {
-    let from = state.dateFrom ? new Date(state.dateFrom + 'T00:00:00') : null;
-    let to = state.dateTo ? new Date(state.dateTo + 'T23:59:59.999') : null;
-    if (from && to && from > to) {   // reversed range: swap the days instead of matching nothing
-      const a = new Date(state.dateTo + 'T00:00:00');
-      const b = new Date(state.dateFrom + 'T23:59:59.999');
-      from = a; to = b;
-    }
-    return (!from || d >= from) && (!to || d <= to);
-  }
-  const cutoff = new Date();
-  cutoff.setDate(cutoff.getDate() - parseInt(period, 10));
-  return d >= cutoff && d <= new Date();
-}
-
-function matchesPeriodAndSearch(b) {
-  if (!inPeriod(b.booking_date, state.period)) return false;
-  if (state.search) {
-    const q = state.search.toLowerCase();
-    const hay = (b.client_name + ' ' + b.client_phone + ' ' + b.address + ' ' + b.responsible + ' ' + b.listing + ' ' + b.pipeline).toLowerCase();
-    if (!hay.includes(q)) return false;
-  }
+  if (period === 'custom') return (!ctx.from || d >= ctx.from) && (!ctx.to || d <= ctx.to);
   return true;
 }
 
+function searchMatches(b) {
+  const q = periodCtx().q;
+  if (!q) return true;
+  return (b.client_name + ' ' + b.client_phone + ' ' + b.address + ' ' + b.responsible + ' ' + b.listing + ' ' + b.pipeline).toLowerCase().includes(q);
+}
+
+function matchesPeriodAndSearch(b) {
+  return inPeriod(b.booking_date) && searchMatches(b);
+}
+
+// Briefings count once: same title and (same start to the minute, or the same recurring series).
+function briefingKey(ev) {
+  return String(ev.listing || '').trim().toLowerCase() + '|' + (ev.is_recurring ? 'series' : String(ev.booking_date || '').slice(0, 16));
+}
+
+// Period/Search match for a briefing copy. A recurring series carries every occurrence: the first one inside the
+// Period is used (the copy's booking_date/date_from/date_to move to it, so lists and the calendar show a real date).
+// The copy is mutated, never the shared calendar event. Items without occurrences match as usual.
+function periodMatchBriefing(item) {
+  const hit = briefingPeriodHit(item);
+  return !!hit && searchMatches(item) && (applyBriefingHit(item, hit), true);
+}
+
+// The Period part of the match, independent of who the copy belongs to: true (no occurrences, item itself is in the
+// Period), the first occurrence inside the Period, or null. Maria's briefings compute it once and reuse it per agent.
+function briefingPeriodHit(item) {
+  if (!item.occurrences || !item.occurrences.length) return inPeriod(item.booking_date) ? true : null;
+  return item.occurrences.find(o => inPeriod(o.stamp)) || null;
+}
+
+function applyBriefingHit(item, hit) {
+  if (hit === true) return;
+  const shift = item.date_to && item.date_from ? new Date(item.date_to) - new Date(item.date_from) : NaN;
+  item.booking_date = hit.stamp;
+  item.date_from = hit.iso;
+  if (Number.isFinite(shift)) item.date_to = new Date(new Date(hit.iso).getTime() + shift).toISOString();
+}
+
+// Computed once per renderAll and shared with the calendars; reset by resetRenderCache() whenever data or filters change.
+let FILTERED = null;
+function resetRenderCache() { FILTERED = null; PCTX = null; }
+
 function filteredBookings() {
-  return DATA.bookings.filter(b => {
+  if (FILTERED) return FILTERED;
+  return (FILTERED = DATA.bookings.filter(b => {
     if (!matchesPeriodAndSearch(b)) return false;
     if (state.agent !== 'all' && b.responsible !== state.agent) return false;
     if (state.type !== 'all' && b.sale_rent !== state.type) return false;
     if (state.status !== 'all' && b.status !== state.status) return false;
     return true;
-  });
+  }));
 }
 
 function calendarBookings() {
@@ -817,16 +922,25 @@ function calendarBookings() {
 function salesDeptCalendarEvents() {
   if (!SALES_CALENDAR) return [];
   return SALES_CALENDAR.events.filter(ev => {
+    if (ev.is_briefing) return false;   // Maria's briefings are a chart-only broadcast, not an agent's calendar event
     if (!matchesPeriodAndSearch(ev)) return false;
     if (state.sdAgent !== 'all' && ev.responsible !== state.sdAgent) return false;
     return true;
   });
 }
 
-function renderStats(bookings) {
-  document.getElementById('stat-total').textContent = bookings.length;
-  document.getElementById('stat-sale').textContent = bookings.filter(b => b.sale_rent === 'Sale').length;
-  document.getElementById('stat-rent').textContent = bookings.filter(b => b.sale_rent === 'Rent').length;
+// Tiles above the chart: sums of the chart's own per-agent entries, so tile and chart always agree.
+function renderStats(entries) {
+  const bookings = entries.reduce((sum, e) => sum + e.bookings, 0);
+  const events = entries.reduce((sum, e) => sum + e.events, 0);
+  // Briefings are counted once each (distinct briefingKey), not once per agent, and are not part of Total.
+  const briefingKeys = new Set();
+  entries.forEach(e => e.briefingList.forEach(ev => briefingKeys.add(briefingKey(ev))));
+  const briefings = briefingKeys.size;
+  document.getElementById('stat-total').textContent = bookings + events;
+  document.getElementById('stat-bookings').textContent = bookings;
+  document.getElementById('stat-events').textContent = events;
+  document.getElementById('stat-briefings').textContent = briefings;
   // Headcount of the active Sales Department roster (not filtered).
   document.getElementById('stat-agents').textContent = SALES_CALENDAR ? SALES_CALENDAR.agents.length : 0;
 }
@@ -849,10 +963,11 @@ function columnPath(x, y, w, h, r) {
     'H' + (x + w - r) + 'Q' + (x + w) + ',' + y + ' ' + (x + w) + ',' + (y + r) + 'V' + (y + h) + 'Z';
 }
 
-// entries: [{ name, bookings, events, n }] already sorted (n = bookings + events).
-// Stacked columns: bookings at the bottom, events created on top. Returns an SVG string (names are escaped).
+// entries: [{ name, bookings, events, briefings, n, h }] already sorted by n (n = bookings + events; h = n + briefings).
+// Column height and the y-axis use h; the number above the column and the sort order use n (briefings are not part of Total).
+// Stacked columns: bookings at the bottom, events created above, briefings on top. Returns an SVG string (names are escaped).
 function agentColumnsSvg(entries) {
-  const max = entries.reduce((m, e) => Math.max(m, e.n), 0);
+  const max = entries.reduce((m, e) => Math.max(m, e.h), 0);
   const { step, top } = niceScale(max);
   const W = BC.left + entries.length * BC.slot + BC.right;
   const H = BC.top + BC.plotH + BC.labelBand;
@@ -866,27 +981,36 @@ function agentColumnsSvg(entries) {
       '<text class="bc-tick" x="' + (BC.left - 8) + '" y="' + (y + 4) + '" text-anchor="end">' + v + '</text>';
   }
 
-  const maxIdx = max > 0 ? entries.findIndex(e => e.n === max) : -1;
+  const maxN = entries.reduce((m, e) => Math.max(m, e.n), 0);
+  const maxIdx = maxN > 0 ? entries.findIndex(e => e.n === maxN) : -1;   // the label sits on the column with the most bookings + events
   entries.forEach((e, i) => {
     const slotX = BC.left + i * BC.slot;
     const cx = slotX + BC.slot / 2;
     const x = cx - BC.barW / 2;
     const label = e.name.length > 14 ? e.name.slice(0, 13) + '\u2026' : e.name;
-    const summary = e.n + ' total (' + e.bookings + (e.bookings === 1 ? ' booking, ' : ' bookings, ') +
-      e.events + (e.events === 1 ? ' event created)' : ' events created)');
-    g += '<g class="bc-col" tabindex="0" role="button" data-agent="' + esc(e.name) + '" data-b="' + e.bookings + '" data-e="' + e.events +
+    const summary = e.n + ' total (' + [
+      showKind('bookings') && e.bookings + (e.bookings === 1 ? ' booking' : ' bookings'),
+      showKind('events') && e.events + (e.events === 1 ? ' event created' : ' events created'),
+    ].filter(Boolean).join(', ') + ')' +
+      (showKind('briefings') ? ', plus ' + e.briefings + (e.briefings === 1 ? ' briefing' : ' briefings') + ' not in total' : '');
+    g += '<g class="bc-col" tabindex="0" role="button" data-agent="' + esc(e.name) + '" data-b="' + e.bookings + '" data-e="' + e.events + '" data-r="' + e.briefings +
         '" aria-label="' + esc(e.name) + ': ' + summary + ' \u2014 view details">' +
       '<rect class="bc-hit" x="' + slotX + '" y="' + BC.top + '" width="' + BC.slot + '" height="' + (BC.plotH + BC.labelBand) + '"/>';
 
-    const yB = yOf(e.bookings);          // top edge of the bookings segment
-    const yTop = yOf(e.n);               // top edge of the whole column
-    if (e.bookings > 0) {
-      g += '<path class="bc-seg bc-seg-b" d="' + columnPath(x, yB, BC.barW, base - yB, e.events > 0 ? 0 : BC.radius) + '"/>';
-    }
-    if (e.events > 0) {
-      const gap = e.bookings > 0 && (yB - yTop) >= 5 ? 2 : 0;   // 2px surface gap between stacked segments
-      g += '<path class="bc-seg bc-seg-e" d="' + columnPath(x, yTop, BC.barW, yB - yTop - gap, BC.radius) + '"/>';
-    }
+    // Stack bottom-up (bookings, events created, briefings). Only the topmost non-zero segment gets the rounded
+    // top; every other segment is square, with a 2px surface gap where it meets the segment above.
+    const segs = [['bc-seg-b', e.bookings], ['bc-seg-e', e.events], ['bc-seg-r', e.briefings]];
+    const topIdx = segs.reduce((t, [, v], k) => v > 0 ? k : t, -1);
+    let acc = 0;                         // running total below the current segment
+    segs.forEach(([cls, v], k) => {
+      if (!v) return;
+      const yBottom = yOf(acc);
+      const yTopSeg = yOf(acc + v);
+      const gap = acc > 0 && (yBottom - yTopSeg) >= 5 ? 2 : 0;   // 2px surface gap between stacked segments
+      g += '<path class="bc-seg ' + cls + '" d="' + columnPath(x, yTopSeg, BC.barW, yBottom - yTopSeg - gap, k === topIdx ? BC.radius : 0) + '"/>';
+      acc += v;
+    });
+    const yTop = yOf(e.h);               // top edge of the whole column (briefings included)
     if (i === maxIdx) {
       g += '<text class="bc-val" x="' + cx + '" y="' + (yTop - 6) + '" text-anchor="middle">' + e.n + '</text>';
     }
@@ -894,27 +1018,31 @@ function agentColumnsSvg(entries) {
       '</g>';
   });
 
-  return '<svg class="bc-svg" viewBox="0 0 ' + W + ' ' + H + '" style="min-width:' + W + 'px" role="group" aria-label="Bookings and events created by agent">' + g + '</svg>';
+  return '<svg class="bc-svg" viewBox="0 0 ' + W + ' ' + H + '" style="min-width:' + W + 'px" role="group" aria-label="Bookings, events created and briefings by agent">' + g + '</svg>';
 }
 
 function renderBookingsTable(entries) {
   const table = document.createElement('table');
   const head = table.createTHead().insertRow();
-  ['Agent', 'Bookings', 'Events created', 'Total'].forEach(t => { const th = document.createElement('th'); th.textContent = t; head.appendChild(th); });
+  // Columns of hidden series (legend toggles) are left out; Agent and Total always stay.
+  const cols = [['Agent'], ['Bookings', 'bookings', e => e.bookings], ['Events created', 'events', e => e.events],
+    ['Briefings', 'briefings', e => e.briefings], ['Total', null, e => e.n]].filter(c => !c[1] || showKind(c[1]));
+  cols.forEach(([t]) => { const th = document.createElement('th'); th.textContent = t; head.appendChild(th); });
   const body = table.createTBody();
   entries.forEach(e => {
     const r = body.insertRow();
     const nameCell = r.insertCell();
-    if (e.eventList.length) {
+    const listed = e.eventList.concat(e.briefingList);   // events and briefings share the name-cell details
+    if (listed.length) {
       const details = document.createElement('details');
       const summary = document.createElement('summary');
       summary.textContent = e.name;
       const list = document.createElement('ul');
       list.className = 'ev-list';
-      e.eventList.slice().sort((a, b) => a.date_from.localeCompare(b.date_from)).forEach(ev => {
+      listed.slice().sort((a, b) => a.date_from.localeCompare(b.date_from)).forEach(ev => {
         const li = document.createElement('li');
         const when = ev.all_day ? fmtDate(ev.date_from).split(' \u00b7 ')[0] : fmtDate(ev.date_from);
-        li.textContent = (ev.listing || '(untitled)') + ' \u2014 ' + when +
+        li.textContent = (ev.kind === 'briefing' ? '[Briefing] ' : '') + (ev.listing || '(untitled)') + ' \u2014 ' + when +
           (ev.is_recurring ? ' (recurring)' : '') + (ev.location ? ' \u00b7 ' + ev.location : '');
         list.appendChild(li);
       });
@@ -923,9 +1051,7 @@ function renderBookingsTable(entries) {
     } else {
       nameCell.textContent = e.name;
     }
-    r.insertCell().textContent = e.bookings;
-    r.insertCell().textContent = e.events;
-    r.insertCell().textContent = e.n;
+    cols.slice(1).forEach(([, , val]) => { r.insertCell().textContent = val(e); });
   });
   document.getElementById('bookings-table').replaceChildren(table);
 }
@@ -934,7 +1060,11 @@ function renderBookingsTable(entries) {
 // Bookings: CRM viewing bookings under the current filters, matched by agent name, plus calendar events the
 // agent created that are bound to a CRM lead (a lead-bound event is a booking, not a generic event).
 // Events created: the other calendar events the agent hosts in their own calendar.
-// Events (both kinds) respect Period, Search and the Agent filter; Type/Status are booking-only concepts.
+// Briefings: events titled "briefing" in Maria Detaro's calendar, or recurring events (is_briefing), listed for every
+// active agent but counted once each in the Briefings tile (briefingKey). A recurring series is one briefing per Period.
+// A copy of the same briefing on an agent's own calendar merges into Maria's and is not also that agent's Event created.
+// An agent's own recurring event (created_by_owner) is a briefing for that agent only. Briefings are not part of Total.
+// Events (all kinds) respect Period, Search and the Agent filter; Type/Status are booking-only concepts.
 // Agent name -> chart entry (with bookingList / eventList) from the latest render; read by the bar-click modal.
 let AGENT_DETAIL = {};
 // The agent shown in the bar-click modal: bookings + created events for its calendar, and the selected day filter.
@@ -957,36 +1087,99 @@ function renderChart(bookings) {
   const empty = document.getElementById('chart-empty');
   const roster = SALES_CALENDAR ? SALES_CALENDAR.agents : [];
   AGENT_DETAIL = {};
+  syncSeriesControls();
   if (!roster.length) {
     el.replaceChildren();
     document.getElementById('bookings-table').replaceChildren();
     empty.textContent = 'No Sales Department agents loaded yet \u2014 run "npm run sync" to pull the roster.';
     empty.style.display = 'block';
+    renderStats([]);
     return;
   }
   const bookingLists = {};
   bookings.forEach(b => { (bookingLists[b.responsible] = bookingLists[b.responsible] || []).push(b); });
   const createdEvents = {};
   const leadBookings = {};
-  (SALES_CALENDAR ? SALES_CALENDAR.events : []).forEach(ev => {
-    if (!ev.created_by_owner) return;
+  const briefings = {};
+  const calEvents = SALES_CALENDAR ? SALES_CALENDAR.events : [];
+  const seenKeys = {};   // agent name -> briefing keys already listed for that agent
+  const addBriefing = (name, copy) => {
+    const key = briefingKey(copy);
+    const seen = seenKeys[name] = seenKeys[name] || new Set();
+    if (seen.has(key)) return;
+    seen.add(key);
+    (briefings[name] = briefings[name] || []).push(copy);
+  };
+  // Pass 1: Maria Detaro's briefings, one copy per active agent (respecting the Agent filter). Her keys are
+  // remembered whatever the Period, so a same-title/start copy on an agent's calendar is always a merged duplicate.
+  const mariaKeys = new Set();
+  calEvents.forEach(ev => {
+    if (!ev.is_briefing) return;
+    mariaKeys.add(briefingKey(ev));
+    const hit = briefingPeriodHit(ev);   // same for every agent: match the Period once per briefing
+    if (!hit) return;
+    roster.forEach(a => {
+      if (state.agent !== 'all' && a.name !== state.agent) return;
+      const copy = { ...ev, kind: 'briefing', responsible: a.name };
+      if (!searchMatches(copy)) return;
+      applyBriefingHit(copy, hit);
+      addBriefing(a.name, copy);
+    });
+  });
+  // Pass 2: events the agents created in their own calendar.
+  calEvents.forEach(ev => {
+    if (ev.is_briefing || !ev.created_by_owner) return;
+    if (mariaKeys.has(briefingKey(ev))) return;   // same briefing as one of Maria's: merged into it
+    if (state.agent !== 'all' && ev.responsible !== state.agent) return;
+    if (ev.is_recurring) {
+      // A recurring event is a briefing for its owner only, once per series.
+      const copy = { ...ev, kind: 'briefing' };
+      if (periodMatchBriefing(copy)) addBriefing(ev.responsible, copy);
+      return;
+    }
     const item = ev.lead_id ? leadBookingItem(ev) : ev;
     if (!matchesPeriodAndSearch(item)) return;
-    if (state.agent !== 'all' && ev.responsible !== state.agent) return;
     const bucket = ev.lead_id ? leadBookings : createdEvents;
     (bucket[ev.responsible] = bucket[ev.responsible] || []).push(item);
   });
   const entries = roster.map(a => {
-    const eventList = createdEvents[a.name] || [];
-    const bookingList = (bookingLists[a.name] || []).concat(leadBookings[a.name] || []);
+    // "Show" filter: a kind's list is kept for 'all' or when it is the selected kind
+    // (bookings incl. lead bookings / events created / briefings).
+    const keep = showKind;
+    const eventList = keep('events') ? (createdEvents[a.name] || []) : [];
+    const bookingList = keep('bookings') ? (bookingLists[a.name] || []).concat(leadBookings[a.name] || []) : [];
+    const briefingList = keep('briefings') ? (briefings[a.name] || []) : [];
     const b = bookingList.length;
-    return { name: a.name, bookings: b, events: eventList.length, n: b + eventList.length, eventList, bookingList };
+    return {
+      name: a.name, bookings: b, events: eventList.length, briefings: briefingList.length,
+      n: b + eventList.length, h: b + eventList.length + briefingList.length, eventList, bookingList, briefingList,
+    };
   }).sort((x, y) => y.n - x.n || x.name.localeCompare(y.name));
   entries.forEach(e => { AGENT_DETAIL[e.name] = e; });
+  renderStats(entries);
   el.innerHTML = '<div class="bc-scroll">' + agentColumnsSvg(entries) + '</div>';
   renderBookingsTable(entries);
-  empty.textContent = 'No bookings or created events match the selected filters.';
-  empty.style.display = entries.some(e => e.n > 0) ? 'none' : 'block';
+  empty.textContent = 'No bookings, created events or briefings match the selected filters.';
+  empty.style.display = entries.some(e => e.h > 0) ? 'none' : 'block';
+}
+
+// Legend buttons + Show dropdown mirror state.kinds (called at the top of every renderChart).
+function syncSeriesControls() {
+  const on = Object.keys(state.kinds).filter(showKind);
+  document.querySelectorAll('.bc-legend-item').forEach(b => b.setAttribute('aria-pressed', String(showKind(b.dataset.kind))));
+  document.getElementById('show-filter').value = on.length === 3 ? 'all' : on.length === 1 ? on[0] : 'custom';
+}
+
+// Legend click: show/hide one series for the whole tab; the last visible series cannot be hidden.
+function wireLegend() {
+  document.querySelector('.bc-legend').addEventListener('click', e => {
+    const btn = e.target.closest('.bc-legend-item');
+    if (!btn) return;
+    const kind = btn.dataset.kind;
+    if (showKind(kind) && Object.keys(state.kinds).filter(showKind).length === 1) return;
+    state.kinds[kind] = !state.kinds[kind];
+    renderAll();
+  });
 }
 
 function wireChartTooltip() {
@@ -995,9 +1188,12 @@ function wireChartTooltip() {
   function show(col, x, y) {
     const b = Number(col.dataset.b);
     const ev = Number(col.dataset.e);
+    const br = Number(col.dataset.r);
+    const vis = [['bookings', 'bc-key-b', 'Bookings', b], ['events', 'bc-key-e', 'Events created', ev], ['briefings', 'bc-key-r', 'Briefings (not in total)', br]]
+      .filter(([kind]) => showKind(kind));
     const total = document.createElement('strong');
-    total.textContent = (b + ev) + ' total';
-    const rows = [['bc-key-b', 'Bookings', b], ['bc-key-e', 'Events created', ev]].map(([cls, label, v]) => {
+    total.textContent = vis.filter(r => r[0] !== 'briefings').reduce((sum, r) => sum + r[3], 0) + ' total';   // briefings are not in Total
+    const rows = vis.map(([, cls, label, v]) => {
       const row = document.createElement('div');
       row.className = 'bc-tip-row';
       const left = document.createElement('span');
@@ -1032,7 +1228,7 @@ function wireChartTooltip() {
 }
 
 function esc(s) {
-  return String(s || '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
 function cellText(v) {
@@ -1100,14 +1296,12 @@ function renderDetails(bookings) {
 
 function renderAll() {
   if (!DATA) return;
+  resetRenderCache();
   const bookings = filteredBookings();
-  renderStats(bookings);
   renderChart(bookings);
   bookingCalendar.render();
   salesDeptCalendar.render();
   renderDetails(bookings);
-  renderStatusStats();
-  renderHistory();
 }
 
 // ---------- Calendar ----------
@@ -1140,7 +1334,7 @@ const MONTH_NAMES = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
 
 // Reusable calendar: each instance owns its own month/year/day-map, so
-// multiple calendars (Booking Calendar, Sales Department) can be browsed
+// multiple calendars (Booking Calendar Listing, Booking Calendar Lead) can be browsed
 // independently without stepping on each other's state.
 function makeCalendarController(opts) {
   // opts: { gridId, monthSelectId, yearSelectId, prevId, nextId, todayId, getBookings }
@@ -1211,13 +1405,6 @@ function makeCalendarController(opts) {
       const attrs = items.length ? ' data-date="' + key + '" tabindex="0" role="button"' : '';
       return '<div class="' + classes + '"' + attrs + '><div class="cal-daynum">' + d + '</div>' + count + dots + '</div>';
     }).join('');
-
-    grid.querySelectorAll('.cal-cell.has-bookings').forEach(cell => {
-      cell.addEventListener('click', () => onDay(cell.dataset.date));
-      cell.addEventListener('keydown', e => {
-        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onDay(cell.dataset.date); }
-      });
-    });
   }
 
   function shift(delta) {
@@ -1234,6 +1421,17 @@ function makeCalendarController(opts) {
   }
 
   function wire() {
+    // One delegated listener pair per grid instead of one per day cell on every render.
+    const grid = document.getElementById(opts.gridId);
+    grid.addEventListener('click', e => {
+      const cell = e.target.closest('.cal-cell.has-bookings');
+      if (cell) onDay(cell.dataset.date);
+    });
+    grid.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const cell = e.target.closest('.cal-cell.has-bookings');
+      if (cell) { e.preventDefault(); onDay(cell.dataset.date); }
+    });
     document.getElementById(opts.prevId).addEventListener('click', () => shift(-1));
     document.getElementById(opts.nextId).addEventListener('click', () => shift(1));
     document.getElementById(opts.todayId).addEventListener('click', goToday);
@@ -1280,24 +1478,26 @@ const agentCalendar = makeCalendarController({
   prevId: 'am-cal-prev', nextId: 'am-cal-next', todayId: 'am-cal-today',
   getBookings: () => AGENT_MODAL.items,
   dotsFor: items =>
-    (items.some(b => b.kind !== 'event') ? '<span class="cal-dot bk"></span>' : '') +
-    (items.some(b => b.kind === 'event') ? '<span class="cal-dot ev"></span>' : ''),
+    (items.some(b => b.kind !== 'event' && b.kind !== 'briefing') ? '<span class="cal-dot bk"></span>' : '') +
+    (items.some(b => b.kind === 'event') ? '<span class="cal-dot ev"></span>' : '') +
+    (items.some(b => b.kind === 'briefing') ? '<span class="cal-dot br"></span>' : ''),
   onDayClick: key => setAgentDay(key),
   selectedDay: () => AGENT_MODAL.day,
 });
 
 function openDayModal(key, dayMap) {
   const items = dayMap[key] || [];
-  const isEvents = items.length > 0 && items[0].kind === 'event';
+  const isEventKind = k => k === 'event' || k === 'briefing';   // both render as calendar events
+  const isEvents = items.length > 0 && isEventKind(items[0].kind);
   const d = new Date(key + 'T00:00:00');
   document.getElementById('day-title').textContent =
-    d.toLocaleDateString('en-GB', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) +
+    DF_DAY_LONG.format(d) +
     ' · ' + items.length + (items.length === 1 ? (isEvents ? ' event' : ' booking') : (isEvents ? ' events' : ' bookings'));
 
   document.getElementById('day-body').innerHTML = items.map(b => {
-    if (b.kind === 'event') {
-      const from = b.date_from ? new Date(b.date_from).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
-      const to = b.date_to ? new Date(b.date_to).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+    if (isEventKind(b.kind)) {
+      const from = b.date_from ? fmtTime(b.date_from) : '';
+      const to = b.date_to ? fmtTime(b.date_to) : '';
       const time = b.all_day ? 'All day' : [from, to].filter(Boolean).join(' – ');
       return '<div class="log-entry">' +
         '<div class="log-main">' +
@@ -1353,10 +1553,6 @@ function renderHistory() {
       '<td><button class="log-btn" data-activity="' + esc(b.activity_id) + '" data-listing="' + esc(b.listing || b.client_name) + '">View log</button></td>' +
     '</tr>';
   }).join('');
-
-  body.querySelectorAll('.log-btn').forEach(btn => {
-    btn.addEventListener('click', () => openLogModal(btn.dataset.activity, btn.dataset.listing));
-  });
 }
 
 function openLogModal(activityId, label) {
@@ -1369,7 +1565,7 @@ function openLogModal(activityId, label) {
   modal.classList.add('open');
   document.body.style.overflow = 'hidden';
 
-  apiGet('/api/history?activity_id=' + encodeURIComponent(activityId))
+  apiGet('api/history?activity_id=' + encodeURIComponent(activityId))
     .then(payload => {
       document.getElementById('log-loading').style.display = 'none';
       const log = payload.log || [];
@@ -1399,10 +1595,16 @@ function closeLogModal() {
   document.body.style.overflow = '';
 }
 
+// Every Sales Department agent (the chart's columns) plus anyone else who has a CRM viewing booking.
 function populateAgentOptions() {
-  const agents = [...new Set(DATA.bookings.map(b => b.responsible).filter(v => v !== 'Unknown'))].sort();
+  const roster = SALES_CALENDAR ? SALES_CALENDAR.agents.map(a => a.name) : [];
+  const agents = [...new Set(roster.concat(DATA.bookings.map(b => b.responsible)).filter(v => v && v !== 'Unknown'))]
+    .sort((a, b) => a.localeCompare(b));
   const sel = document.getElementById('agent-filter');
+  const prev = state.agent;
   sel.innerHTML = '<option value="all">All agents</option>' + agents.map(a => '<option value="' + esc(a) + '">' + esc(a) + '</option>').join('');
+  if (agents.includes(prev)) sel.value = prev;
+  else state.agent = 'all';
 }
 
 function populateCalAgentOptions() {
@@ -1425,12 +1627,26 @@ function populateSalesDeptAgentOptions() {
   else state.sdAgent = 'all';
 }
 
+// Show only the filters that apply to the tab in view (each control lists its tabs in data-panels);
+// the whole bar disappears on a tab none of them apply to.
+function showFiltersFor(panelId) {
+  const bar = document.querySelector('.controls');
+  let any = false;
+  bar.querySelectorAll('[data-panels]').forEach(el => {
+    const on = el.dataset.panels.split(' ').includes(panelId);
+    el.classList.toggle('tab-hidden', !on);
+    if (on) any = true;
+  });
+  bar.classList.toggle('tab-hidden', !any);
+}
+
 function activateTab(panelId) {
   document.querySelectorAll('.tab').forEach(x => x.classList.toggle('active', x.dataset.panel === panelId));
   document.querySelectorAll('.panel').forEach(x => x.classList.toggle('active', x.id === panelId));
+  showFiltersFor(panelId);
 }
 
-// Bar click: list everything behind one agent's column (their bookings and the events they created),
+// Bar click: list everything behind one agent's column (their bookings, the events they created and briefings),
 // exactly as counted by the chart under the current filters, plus a small calendar of the same items.
 function openAgentModal(name) {
   const d = AGENT_DETAIL[name];
@@ -1438,9 +1654,13 @@ function openAgentModal(name) {
   document.getElementById('bc-tip').classList.remove('show');
   const plural = (n, word) => n + ' ' + word + (n === 1 ? '' : 's');
   document.getElementById('agent-title').textContent = name;
-  document.getElementById('agent-summary').textContent = plural(d.bookings, 'booking') + ' · ' + plural(d.events, 'event') + ' created';
+  document.getElementById('agent-summary').textContent = [
+    showKind('bookings') && plural(d.bookings, 'booking'),
+    showKind('events') && plural(d.events, 'event') + ' created',
+    showKind('briefings') && plural(d.briefings, 'briefing'),
+  ].filter(Boolean).join(' · ');
 
-  AGENT_MODAL = { name, items: d.bookingList.concat(d.eventList), day: null };
+  AGENT_MODAL = { name, items: d.bookingList.concat(d.eventList, d.briefingList), day: null };
   renderAgentLists();
 
   const keys = AGENT_MODAL.items.filter(b => b.status !== 'removed').map(b => (b.booking_date || '').slice(0, 10)).filter(Boolean);
@@ -1466,7 +1686,7 @@ function clearAgentDay() {
 
 function renderAgentLists() {
   const day = AGENT_MODAL.day;
-  const time = x => x ? new Date(x).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
+  const time = x => x ? fmtTime(x) : '';
   const bookingRow = b =>
     '<div class="log-entry"><div class="log-main">' +
       '<div class="log-detail">' + cellText(b.client_name) + ' &middot; ' + saleRentBadge(b.sale_rent) + ' ' + statusBadge(b.status) + '</div>' +
@@ -1492,13 +1712,17 @@ function renderAgentLists() {
   const section = (title, rows, row) =>
     '<div class="am-section"><h3>' + title + ' (' + rows.length + ')</h3>' +
     (rows.length ? rows.map(row).join('') : '<div class="am-empty">' + (day ? 'None on this day' : 'None') + '</div>') + '</div>';
-  const pick = (isEvent, sortKey) => AGENT_MODAL.items
-    .filter(x => (x.kind === 'event') === isEvent && (!day || (x.booking_date || '').slice(0, 10) === day))
+  // kind: 'event' | 'briefing', or 'booking' for everything else (CRM bookings and lead bookings).
+  const kindOf = x => x.kind === 'event' || x.kind === 'briefing' ? x.kind : 'booking';
+  const pick = (kind, sortKey) => AGENT_MODAL.items
+    .filter(x => kindOf(x) === kind && (!day || (x.booking_date || '').slice(0, 10) === day))
     .sort((a, b) => (a[sortKey] || '').localeCompare(b[sortKey] || ''));
+
+  const show = showKind;
 
   const bar = document.getElementById('agent-daybar');
   if (day) {
-    const label = new Date(day + 'T00:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
+    const label = DF_DAY_SHORT.format(new Date(day + 'T00:00:00'));
     const text = document.createElement('span');
     text.textContent = 'Showing ' + label;
     const btn = document.createElement('button');
@@ -1514,8 +1738,9 @@ function renderAgentLists() {
   }
 
   document.getElementById('agent-body').innerHTML =
-    section('Bookings', pick(false, 'booking_date'), b => b.kind === 'lead' ? leadRow(b) : bookingRow(b)) +
-    section('Events created', pick(true, 'date_from'), eventRow);
+    (show('bookings') ? section('Bookings', pick('booking', 'booking_date'), b => b.kind === 'lead' ? leadRow(b) : bookingRow(b)) : '') +
+    (show('events') ? section('Events created', pick('event', 'date_from'), eventRow) : '') +
+    (show('briefings') ? section('Briefings', pick('briefing', 'date_from'), eventRow) : '');
 }
 
 function closeAgentModal() {
@@ -1550,9 +1775,18 @@ function wireControls() {
   document.getElementById('period-from').addEventListener('change', e => { state.dateFrom = e.target.value; renderAll(); });
   document.getElementById('period-to').addEventListener('change', e => { state.dateTo = e.target.value; renderAll(); });
   document.getElementById('agent-filter').addEventListener('change', e => { state.agent = e.target.value; renderAll(); });
+  document.getElementById('show-filter').addEventListener('change', e => {
+    Object.keys(state.kinds).forEach(k => { state.kinds[k] = e.target.value === 'all' || e.target.value === k; });
+    renderAll();
+  });
   document.getElementById('type-filter').addEventListener('change', e => { state.type = e.target.value; renderAll(); });
   document.getElementById('status-filter').addEventListener('change', e => { state.status = e.target.value; renderAll(); });
   document.getElementById('search').addEventListener('input', debounce(e => { state.search = e.target.value.trim(); renderAll(); }, 150));
+
+  document.getElementById('status-body').addEventListener('click', e => {
+    const btn = e.target.closest('.log-btn');
+    if (btn) openLogModal(btn.dataset.activity, btn.dataset.listing);
+  });
 
   document.getElementById('cal-agent-filter').addEventListener('change', e => { state.calAgent = e.target.value; bookingCalendar.render(); });
   document.getElementById('cal-type-filter').addEventListener('change', e => { state.calType = e.target.value; bookingCalendar.render(); });
@@ -1563,6 +1797,8 @@ function wireControls() {
   agentCalendar.wire();
   wireChartTooltip();
   wireChartClicks();
+  wireLegend();
+  showFiltersFor(document.querySelector('.tab.active').dataset.panel);
 }
 
 function showError(msg) {
@@ -1577,24 +1813,39 @@ function setLoading(on) {
   document.getElementById('content').style.display = on ? 'none' : 'block';
 }
 
-async function load() {
+// Pulls fresh data from Bitrix24 into the tracker's database (same job as the scheduled sync).
+// A failed sync is not fatal: the page still shows what the database already holds.
+async function syncFromBitrix() {
+  try {
+    const res = await fetch('api/sync', { method: 'POST' });
+    if (res.status === 401) { window.showLogin(); return new Promise(() => {}); }
+    if (!res.ok) console.warn('Sync failed (HTTP ' + res.status + ')');
+  } catch (err) {
+    console.warn('Sync failed:', err);
+  }
+}
+
+async function load(syncFirst) {
   const btn = document.getElementById('refresh-btn');
   btn.disabled = true;
-  btn.textContent = 'Loading...';
+  btn.textContent = syncFirst ? 'Syncing...' : 'Loading...';
   document.getElementById('error').style.display = 'none';
   setLoading(true);
   try {
-    DATA = await loadData();
-    SALES_CALENDAR = await loadSalesCalendarData();
+    if (syncFirst) await syncFromBitrix();
+    [DATA, SALES_CALENDAR] = await Promise.all([loadData(), loadSalesCalendarData()]);
+    resetRenderCache();
     populateAgentOptions();
     populateCalAgentOptions();
     populateSalesDeptAgentOptions();
     bookingCalendar.populateSelects();
     salesDeptCalendar.populateSelects();
     renderAll();
+    renderStatusStats();   // history and status tiles do not depend on the filters: once per load
+    renderHistory();
     document.getElementById('last-updated').textContent = 'Updated ' + fmtDate(DATA.meta.generated);
     document.getElementById('generated').textContent =
-      'Source: Bitrix24 \u00b7 ' + DATA.meta.total_activities + ' bookings tracked \u00b7 ' + DATA.events.length + ' status events';
+      'Source: Bitrix24';
   } catch (err) {
     console.error(err);
     showError(err.message || String(err));
@@ -1646,10 +1897,10 @@ function cycleTheme() {
 
 document.getElementById('theme-btn').addEventListener('click', cycleTheme);
 
-document.getElementById('refresh-btn').addEventListener('click', load);
+document.getElementById('refresh-btn').addEventListener('click', () => load(true));
 document.getElementById('logout-btn').addEventListener('click', async () => {
   try {
-    await fetch('/api/logout', { method: 'POST' });
+    await fetch('api/logout', { method: 'POST' });
   } finally {
     window.location.reload();
   }
@@ -1690,7 +1941,7 @@ document.getElementById('change-password-form').addEventListener('submit', async
   btn.disabled = true;
   btn.textContent = 'Updating...';
   try {
-    const res = await fetch('/api/change-password', {
+    const res = await fetch('api/change-password', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ currentPassword, newPassword }),

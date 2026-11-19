@@ -1,5 +1,6 @@
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const Database = require('better-sqlite3');
 
 const DATA_DIR = path.join(__dirname, 'data');
@@ -58,7 +59,6 @@ db.exec(`
   );
 
   CREATE INDEX IF NOT EXISTS idx_bookings_status ON bookings(status);
-  CREATE INDEX IF NOT EXISTS idx_bookings_responsible ON bookings(responsible);
   CREATE INDEX IF NOT EXISTS idx_statuslog_activity ON status_log(activity_id);
 
   CREATE TABLE IF NOT EXISTS calendar_events (
@@ -73,6 +73,8 @@ db.exec(`
     location TEXT,
     is_recurring INTEGER NOT NULL DEFAULT 0,
     created_by_owner INTEGER NOT NULL DEFAULT 0,
+    is_briefing INTEGER NOT NULL DEFAULT 0,
+    occurrences TEXT NOT NULL DEFAULT '',
     lead_id TEXT NOT NULL DEFAULT '',
     lead_title TEXT NOT NULL DEFAULT '',
     lead_client TEXT NOT NULL DEFAULT '',
@@ -88,8 +90,15 @@ db.exec(`
     updated_at TEXT NOT NULL
   );
 
-  CREATE INDEX IF NOT EXISTS idx_calendar_events_status ON calendar_events(status);
-  CREATE INDEX IF NOT EXISTS idx_calendar_events_owner ON calendar_events(owner_name);
+  CREATE INDEX IF NOT EXISTS idx_calendar_events_status_date ON calendar_events(status, date_from);
+`);
+
+// Superseded/unused indexes: idx_calendar_events_status is a prefix of the (status, date_from) index above, and no
+// query filters or orders on calendar_events.owner_name or bookings.responsible alone.
+db.exec(`
+  DROP INDEX IF EXISTS idx_calendar_events_status;
+  DROP INDEX IF EXISTS idx_calendar_events_owner;
+  DROP INDEX IF EXISTS idx_bookings_responsible;
 `);
 
 // Additive migration for DBs created before sales_department existed.
@@ -105,6 +114,22 @@ const hasCreatedByOwnerColumn = db.prepare(`PRAGMA table_info(calendar_events)`)
   .some(col => col.name === 'created_by_owner');
 if (!hasCreatedByOwnerColumn) {
   db.exec(`ALTER TABLE calendar_events ADD COLUMN created_by_owner INTEGER NOT NULL DEFAULT 0`);
+}
+
+// Additive migration for DBs created before calendar_events.is_briefing existed
+// (1 = the event was made by the briefing creator; filled in by the next sync).
+const hasIsBriefingColumn = db.prepare(`PRAGMA table_info(calendar_events)`).all()
+  .some(col => col.name === 'is_briefing');
+if (!hasIsBriefingColumn) {
+  db.exec(`ALTER TABLE calendar_events ADD COLUMN is_briefing INTEGER NOT NULL DEFAULT 0`);
+}
+
+// Additive migration for DBs created before calendar_events.occurrences existed
+// (JSON array of ISO start times of a recurring series; '' for non-recurring; filled in by the next sync).
+const hasOccurrencesColumn = db.prepare(`PRAGMA table_info(calendar_events)`).all()
+  .some(col => col.name === 'occurrences');
+if (!hasOccurrencesColumn) {
+  db.exec(`ALTER TABLE calendar_events ADD COLUMN occurrences TEXT NOT NULL DEFAULT ''`);
 }
 
 // Additive migration for DBs created before calendar_events carried CRM lead details
@@ -144,8 +169,12 @@ const UPDATE_BOOKING = db.prepare(`
   WHERE activity_id = @activity_id
 `);
 
-const SET_STATUS = db.prepare(
-  `UPDATE bookings SET status = ?, updated_at = ? WHERE activity_id = ?`
+const MARK_REMOVED = db.prepare(
+  `UPDATE bookings SET status = 'removed', updated_at = ? WHERE activity_id = ? AND status = 'active'`
+);
+
+const SET_CREATED_AT = db.prepare(
+  `UPDATE bookings SET created_at = ? WHERE activity_id = ?`
 );
 
 const LOG_EVENT = db.prepare(`
@@ -182,6 +211,8 @@ const GET_SESSION = db.prepare(`SELECT * FROM sessions WHERE token = ?`);
 
 const DELETE_SESSION = db.prepare(`DELETE FROM sessions WHERE token = ?`);
 
+const DELETE_ALL_SESSIONS = db.prepare(`DELETE FROM sessions`);
+
 const DELETE_EXPIRED_SESSIONS = db.prepare(`DELETE FROM sessions WHERE expires_at <= ?`);
 
 const GET_CREDENTIALS = db.prepare(`SELECT * FROM credentials WHERE username = ?`);
@@ -193,10 +224,10 @@ const UPSERT_CREDENTIALS = db.prepare(`
 
 const INSERT_CALENDAR_EVENT = db.prepare(`
   INSERT INTO calendar_events
-    (event_id, owner_id, owner_name, name, date_from, date_to, all_day, location, is_recurring, created_by_owner,
+    (event_id, owner_id, owner_name, name, date_from, date_to, all_day, location, is_recurring, created_by_owner, is_briefing, occurrences,
      lead_id, lead_title, lead_client, lead_phone, created_at, updated_at, status)
   VALUES
-    (@event_id, @owner_id, @owner_name, @name, @date_from, @date_to, @all_day, @location, @is_recurring, @created_by_owner,
+    (@event_id, @owner_id, @owner_name, @name, @date_from, @date_to, @all_day, @location, @is_recurring, @created_by_owner, @is_briefing, @occurrences,
      @lead_id, @lead_title, @lead_client, @lead_phone, @created_at, @updated_at, @status)
 `);
 
@@ -206,17 +237,24 @@ const UPDATE_CALENDAR_EVENT = db.prepare(`
   UPDATE calendar_events SET
     owner_id = @owner_id, owner_name = @owner_name, name = @name,
     date_from = @date_from, date_to = @date_to, all_day = @all_day,
-    location = @location, is_recurring = @is_recurring, created_by_owner = @created_by_owner,
+    location = @location, is_recurring = @is_recurring, created_by_owner = @created_by_owner, is_briefing = @is_briefing, occurrences = @occurrences,
     lead_id = @lead_id, lead_title = @lead_title, lead_client = @lead_client, lead_phone = @lead_phone,
     updated_at = @updated_at, status = @status
   WHERE event_id = @event_id
 `);
 
-const SET_CALENDAR_EVENT_STATUS = db.prepare(
-  `UPDATE calendar_events SET status = ?, updated_at = ? WHERE event_id = ?`
+const MARK_CALENDAR_EVENT_REMOVED = db.prepare(
+  `UPDATE calendar_events SET status = 'removed', updated_at = ? WHERE event_id = ? AND status = 'active'`
 );
 
 const ALL_ACTIVE_CALENDAR_EVENTS = db.prepare(`SELECT event_id FROM calendar_events WHERE status = 'active'`);
+
+// Lead details already stored on active events, used as a fallback when a fresh lead fetch misses a lead.
+const STORED_LEAD_DETAILS = db.prepare(`
+  SELECT lead_id, lead_title, lead_client, lead_phone FROM calendar_events
+  WHERE status = 'active' AND lead_id != '' AND (lead_title != '' OR lead_client != '')
+  ORDER BY date_from ASC
+`);
 
 const ALL_CALENDAR_EVENTS = db.prepare(`SELECT * FROM calendar_events WHERE status = 'active' ORDER BY date_from ASC`);
 
@@ -231,16 +269,21 @@ const ALL_SALES_DEPT_AGENTS = db.prepare(`SELECT * FROM sales_dept_agents ORDER 
 function upsertBooking(b, now) {
   const existing = GET_BOOKING.get(b.activity_id);
   if (!existing) {
-    INSERT_BOOKING.run({ ...b, created_at: now, updated_at: now, status: 'active' });
+    INSERT_BOOKING.run({ ...b, created_at: b.created_at || now, updated_at: now, status: 'active' });
     LOG_EVENT.run(b.activity_id, 'created', 'Booking created', now);
     return { firstSeen: true, status: 'created' };
+  }
+
+  // created_at is the booking's real CRM creation time, not when this database first saw it.
+  // Correct rows stored before that (or with a fallback value) without logging a CRM change.
+  if (b.created_at && existing.created_at !== b.created_at) {
+    SET_CREATED_AT.run(b.created_at, b.activity_id);
   }
 
   const fields = ['owner_id', 'listing', 'client_name', 'client_phone', 'sale_rent',
                   'address', 'responsible', 'pipeline', 'sales_department'];
   const changed = fields.filter(f => (existing[f] || '') !== (b[f] || ''));
   const wasRemoved = existing.status === 'removed';
-  const status = wasRemoved ? 'active' : 'active';
 
   if (wasRemoved) {
     UPDATE_BOOKING.run({ ...b, updated_at: now, status: 'active' });
@@ -259,9 +302,7 @@ function upsertBooking(b, now) {
 }
 
 function markRemoved(activity_id, now) {
-  const existing = GET_BOOKING.get(activity_id);
-  if (!existing || existing.status === 'removed') return { changed: false };
-  SET_STATUS.run('removed', now, activity_id);
+  if (MARK_REMOVED.run(now, activity_id).changes === 0) return { changed: false };
   LOG_EVENT.run(activity_id, 'removed', 'Booking no longer present in CRM timeline', now);
   return { changed: true };
 }
@@ -294,16 +335,23 @@ function getAgentSummary() {
   return AGENT_SUMMARY.all();
 }
 
+// Only a SHA-256 of the session token is stored, so a copy of the database can't be used to hijack live sessions.
+const hashToken = token => crypto.createHash('sha256').update(String(token)).digest('hex');
+
 function createSession(token, createdAt, expiresAt) {
-  INSERT_SESSION.run(token, createdAt, expiresAt);
+  INSERT_SESSION.run(hashToken(token), createdAt, expiresAt);
 }
 
 function getSession(token) {
-  return GET_SESSION.get(token);
+  return GET_SESSION.get(hashToken(token));
 }
 
 function deleteSession(token) {
-  DELETE_SESSION.run(token);
+  DELETE_SESSION.run(hashToken(token));
+}
+
+function deleteAllSessions() {
+  DELETE_ALL_SESSIONS.run();
 }
 
 function deleteExpiredSessions() {
@@ -325,7 +373,7 @@ function upsertCalendarEvent(ev, now) {
     return { firstSeen: true, status: 'created' };
   }
 
-  const fields = ['owner_id', 'owner_name', 'name', 'date_from', 'date_to', 'all_day', 'location', 'is_recurring', 'created_by_owner',
+  const fields = ['owner_id', 'owner_name', 'name', 'date_from', 'date_to', 'all_day', 'location', 'is_recurring', 'created_by_owner', 'is_briefing', 'occurrences',
                   'lead_id', 'lead_title', 'lead_client', 'lead_phone'];
   const changed = fields.filter(f => (existing[f] || '') !== (ev[f] || ''));
   const wasRemoved = existing.status === 'removed';
@@ -344,14 +392,15 @@ function upsertCalendarEvent(ev, now) {
 }
 
 function markCalendarEventRemoved(event_id, now) {
-  const existing = GET_CALENDAR_EVENT.get(event_id);
-  if (!existing || existing.status === 'removed') return { changed: false };
-  SET_CALENDAR_EVENT_STATUS.run('removed', now, event_id);
-  return { changed: true };
+  return { changed: MARK_CALENDAR_EVENT_REMOVED.run(now, event_id).changes > 0 };
 }
 
 function getActiveCalendarEventIds() {
   return ALL_ACTIVE_CALENDAR_EVENTS.all().map(r => r.event_id);
+}
+
+function getStoredLeadDetails() {
+  return STORED_LEAD_DETAILS.all();
 }
 
 function getCalendarEvents() {
@@ -384,6 +433,7 @@ module.exports = {
   createSession,
   getSession,
   deleteSession,
+  deleteAllSessions,
   deleteExpiredSessions,
   getCredentials,
   updateCredentials,
@@ -391,6 +441,7 @@ module.exports = {
   markCalendarEventRemoved,
   getActiveCalendarEventIds,
   getCalendarEvents,
+  getStoredLeadDetails,
   replaceSalesDeptAgents,
   getSalesDeptAgents,
 };

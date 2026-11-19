@@ -14,7 +14,7 @@
 
 - No new npm dependencies. No test framework exists in this repo — verify with `node --check`, live `npm run sync` runs, direct `sqlite3` inspection, and static ID-integrity checks on `index.html`, matching this repo's established convention.
 - `SALES_DEPARTMENT_ID = 5` already exists as a constant in `sync.js` (from earlier `sales_department` field work) — reuse it, do not redefine.
-- The current, correct Bitrix24 webhook token is already in place in `sync.js` (`WEBHOOK` constant) — do not change it.
+- The current, correct Bitrix24 webhook token is read from `BITRIX24_WEBHOOK_URL` in the root `.env` — do not change it.
 - Recurring calendar events (`RRULE`) store only their anchor/first occurrence for v1 — do not implement recurrence expansion.
 - Sync window: 3 months back, 6 months forward from "now" at sync time.
 - **Do not commit after each task.** Leave all changes unstaged in the working tree for the user to review as a whole, consistent with this session's established practice (only the design spec doc itself was committed). Omit any "commit" step you'd otherwise expect from the task template.

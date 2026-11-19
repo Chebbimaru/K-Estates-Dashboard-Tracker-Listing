@@ -57,7 +57,7 @@
       btn.disabled = true;
       btn.textContent = 'Signing in...';
       try {
-        var res = await fetch('/api/login', {
+        var res = await fetch('api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

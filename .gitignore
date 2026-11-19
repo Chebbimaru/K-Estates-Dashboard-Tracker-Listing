@@ -12,3 +12,5 @@ AGENTS.md
 
 # macOS
 .DS_Store
+# Browser automation output
+.playwright-mcp/
