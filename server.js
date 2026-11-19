@@ -18,7 +18,14 @@ const {
   getSalesDeptAgents,
 } = require('./db');
 const { verifyPassword, generateSessionToken, changePassword, SESSION_DURATION_MS } = require('./auth');
-const { clientIp, isHttps, securityHeaders, createRateLimiter, checkOrigin } = require('../security.cjs');
+let security;
+try {
+  security = require('../security.cjs');
+} catch (err) {
+  if (err.code !== 'MODULE_NOT_FOUND' || !String(err.message).includes('security.cjs')) throw err;
+  throw new Error('security.cjs not found next to this folder: run inside the root app, or copy the root app\'s security.cjs to ../security.cjs');
+}
+const { clientIp, isHttps, securityHeaders, createRateLimiter, checkOrigin } = security;
 
 // Wrong-password guesses (login and change-password): 5 per IP and 50 overall per 15 minutes.
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;

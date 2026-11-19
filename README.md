@@ -36,7 +36,9 @@ npm run sync       # pull latest bookings from Bitrix24 into SQLite
 
 The server runs on port 3055 by default (`PORT` env to override). The database is auto-created at `data/bookings.db` (`DB_PATH` env to override). Restart `server.js` after editing it; HTML edits are picked up on refresh.
 
-> Note: `npm run sync` is on-demand. Hook it up to a cron job if you want history to stay current automatically.
+While the server runs it also syncs on startup and every 15 minutes (`LISTING_SYNC_MINUTES` to change), and the dashboard's Refresh data button triggers one. `npm run sync` is the on-demand run for when the server is not up.
+
+**Folder layout.** The tracker expects `../security.cjs` and `../.env` one level above this folder. Inside the root app both already exist. For a standalone clone, copy the root app's `security.cjs` into the parent folder, then `cp .env.example ../.env`, fill in `BITRIX24_WEBHOOK_URL` and `chmod 600 ../.env`. Without `security.cjs` the server stops at startup with a message saying so.
 
 ## Configuration
 
