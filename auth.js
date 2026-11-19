@@ -1,13 +1,16 @@
 const crypto = require('crypto');
+const { promisify } = require('util');
 const { getCredentials, updateCredentials } = require('./db');
+
+const scrypt = promisify(crypto.scrypt); // same defaults as scryptSync, so stored hashes still verify
 
 const SESSION_DURATION_MS = 8 * 60 * 60 * 1000; // 8 hours
 const MIN_PASSWORD_LENGTH = 8;
 
-function verifyPassword(username, password) {
+async function verifyPassword(username, password) {
   const row = getCredentials(username);
   if (!row) return false;
-  const hash = crypto.scryptSync(password, row.salt, 64);
+  const hash = await scrypt(password, row.salt, 64);
   return crypto.timingSafeEqual(hash, Buffer.from(row.hash, 'hex'));
 }
 
@@ -15,11 +18,11 @@ function generateSessionToken() {
   return crypto.randomBytes(32).toString('hex');
 }
 
-function changePassword(username, currentPassword, newPassword) {
+async function changePassword(username, currentPassword, newPassword) {
   const row = getCredentials(username);
   if (!row) return { ok: false, error: 'user not found' };
 
-  const currentHash = crypto.scryptSync(currentPassword || '', row.salt, 64);
+  const currentHash = await scrypt(currentPassword || '', row.salt, 64);
   const currentOk = crypto.timingSafeEqual(currentHash, Buffer.from(row.hash, 'hex'));
   if (!currentOk) return { ok: false, error: 'current password is incorrect' };
 
@@ -28,7 +31,7 @@ function changePassword(username, currentPassword, newPassword) {
   }
 
   const salt = crypto.randomBytes(16).toString('hex');
-  const hash = crypto.scryptSync(newPassword, salt, 64).toString('hex');
+  const hash = (await scrypt(newPassword, salt, 64)).toString('hex');
   updateCredentials(username, salt, hash);
   return { ok: true };
 }
