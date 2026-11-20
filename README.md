@@ -38,19 +38,17 @@ The server runs on port 3055 by default (`PORT` env to override). The database i
 
 While the server runs it also syncs on startup and every 15 minutes (`LISTING_SYNC_MINUTES` to change), and the dashboard's Refresh data button triggers one. `npm run sync` is the on-demand run for when the server is not up.
 
-**Folder layout.** The tracker expects `../security.cjs` and `../.env` one level above this folder. Inside the root app both already exist. For a standalone clone, copy the root app's `security.cjs` into the parent folder, then `cp .env.example ../.env`, fill in `BITRIX24_WEBHOOK_URL` and `chmod 600 ../.env`. Without `security.cjs` the server stops at startup with a message saying so.
+**Setup.** The tracker is a self-contained app: everything it needs is in this folder. Create the config file with `cp .env.example .env`, fill in `BITRIX24_WEBHOOK_URL` and `chmod 600 .env`.
 
 ## Configuration
 
-The Bitrix24 webhook URL comes from `BITRIX24_WEBHOOK_URL` in the root `.env` (shared with the root app; standalone runs load `../.env` automatically). Set `LISTING_COOKIE_PATH` to change the session cookie path (the root app sets it to `/listing-tracker`). Field mappings for the Property Inventory SPA (`entityTypeId=1032`) are documented inline there.
+The Bitrix24 webhook URL comes from `BITRIX24_WEBHOOK_URL` in `.env` (loaded from this folder). Set `LISTING_COOKIE_PATH` only if you serve the app under a URL prefix (default `/`). Field mappings for the Property Inventory SPA (`entityTypeId=1032`) are documented inline there.
 
 Calendars synced in from iCloud (an agent's personal calendars, e.g. Perso/Busy) are not counted (`isICloudCalendar` in `sync.js`); local Bitrix24 calendars and Office 365 ones are. This affects Bookings by Agent and the Calendar Events tab.
 
 Agents can be hidden from the whole dashboard (chart, dropdowns, tiles, calendars) by editing the `HIDDEN_AGENTS` constant near the top of the script in `index.html` (`ids` and `names`). This is client-side only; their data stays in the database. Shayan Ahmadzadeh is hidden by default.
 
 ## Security / environment
-
-These apply when the main app (`npm start` in the project root) serves both the dashboard and this tracker.
 
 | Variable | Default | Purpose |
 |---|---|---|
@@ -60,9 +58,15 @@ These apply when the main app (`npm start` in the project root) serves both the 
 
 - **HTTPS:** the app speaks plain HTTP. Terminate HTTPS in front of it. Over plain HTTP the tracker password and session cookie are readable on the network.
 - **Login:** 5 wrong passwords per IP (50 overall) in 15 minutes locks login out with a 429. Sessions last 8 hours, are stored hashed, and all end when the password is changed.
-- **`/api/health`** answers only to requests made from the server itself (`curl http://localhost:3001/api/health`). Through a proxy it returns 404.
-- **`.env`** contains the Bitrix webhook URL, which gives full CRM access. Keep it `chmod 600`, out of backups you share, and out of version control. The app warns at startup if other users can read it.
-- The public dashboard (`/`, `/api/dashboard`) has no login by design.
+- **`.env`** contains the Bitrix webhook URL, which gives full CRM access. Keep it `chmod 600`, out of backups you share, and and out of version control (`.env` is in `.gitignore`).
+
+## Deploy
+
+1. Install Node 20.12+, then `git clone` the repo and run `npm ci --omit=dev` on the server (`better-sqlite3` is a native module, so install it there instead of copying `node_modules`).
+2. `cp .env.example .env`, set `BITRIX24_WEBHOOK_URL`, then `chmod 600 .env`.
+3. Run it under a process manager so it restarts and keeps syncing: `pm2 start server.js --name listing-tracker && pm2 save && pm2 startup` (or a systemd unit running `node server.js`).
+4. Put HTTPS in front with nginx or Caddy, proxying to `127.0.0.1:3055`, and set `HOST=127.0.0.1`, `TRUST_PROXY=1` and `COOKIE_SECURE=1` in `.env`.
+5. Log in with `admin`, and change the password straight away (a fresh database is seeded with the default account). Back up `data/`, which holds the database and the password hash.
 
 ## API
 

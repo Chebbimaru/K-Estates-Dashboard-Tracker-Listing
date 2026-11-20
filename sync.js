@@ -11,11 +11,11 @@ const {
   getStoredLeadDetails,
 } = require('./db');
 
-// Single shared webhook from the root .env (BITRIX24_WEBHOOK_URL); read lazily so
+// Single webhook from .env (BITRIX24_WEBHOOK_URL); read lazily so
 // requiring this module never throws.
 function getWebhook() {
   const url = process.env.BITRIX24_WEBHOOK_URL;
-  if (!url) throw new Error('BITRIX24_WEBHOOK_URL is not set (define it in the root .env)');
+  if (!url) throw new Error('BITRIX24_WEBHOOK_URL is not set (define it in .env)');
   return url.endsWith('/') ? url : url + '/';
 }
 const ENTITY_TYPE_ID = 1032;   // Property Inventory SPA
@@ -614,7 +614,7 @@ async function sync() {
 }
 
 if (require.main === module) {
-  try { process.loadEnvFile(require('path').join(__dirname, '..', '.env')); } catch {}
+  try { process.loadEnvFile(require('path').join(__dirname, '.env')); } catch {}
   sync().catch(err => {
     console.error('[sync] Fatal error:', err.message);
     process.exit(1);
