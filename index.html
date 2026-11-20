@@ -376,6 +376,14 @@
     .cal-select { font-size: 10px; padding: 6px 8px; }
     .am-layout { grid-template-columns: 1fr; }
     .am-cal { position: static; }
+    .topbar-right { flex-wrap: wrap; gap: 10px; }
+    .tabs { gap: 22px; overflow-x: auto; scrollbar-width: none; }
+    .tabs::-webkit-scrollbar { display: none; }
+    .tab { white-space: nowrap; flex: none; }
+    .cal-nav { flex-wrap: wrap; gap: 8px; }
+  }
+  @media (max-width: 1000px) {
+    .card > table { display: block; overflow-x: auto; }
   }
 </style>
 </head>
