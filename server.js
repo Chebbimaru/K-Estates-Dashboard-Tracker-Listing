@@ -18,14 +18,7 @@ const {
   getSalesDeptAgents,
 } = require('./db');
 const { verifyPassword, generateSessionToken, changePassword, SESSION_DURATION_MS } = require('./auth');
-let security;
-try {
-  security = require('../security.cjs');
-} catch (err) {
-  if (err.code !== 'MODULE_NOT_FOUND' || !String(err.message).includes('security.cjs')) throw err;
-  throw new Error('security.cjs not found next to this folder: run inside the root app, or copy the root app\'s security.cjs to ../security.cjs');
-}
-const { clientIp, isHttps, securityHeaders, createRateLimiter, checkOrigin } = security;
+const { clientIp, isHttps, securityHeaders, createRateLimiter, checkOrigin } = require('./security.cjs');
 
 // Wrong-password guesses (login and change-password): 5 per IP and 50 overall per 15 minutes.
 const LOGIN_WINDOW_MS = 15 * 60 * 1000;
@@ -324,8 +317,8 @@ async function handler(req, res) {
 module.exports = { handler, start };
 
 if (require.main === module) {
-  // Standalone run: pick up the shared ../.env (Node 20.12+); ignore if absent.
-  try { process.loadEnvFile(path.join(__dirname, '..', '.env')); } catch {}
+  // Standalone run: pick up ./.env (Node 20.12+); ignore if absent.
+  try { process.loadEnvFile(path.join(__dirname, '.env')); } catch {}
   const server = http.createServer(handler);
   server.headersTimeout = 15_000;
   server.requestTimeout = 30_000;
